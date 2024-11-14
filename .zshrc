@@ -99,6 +99,14 @@ source $ZSH/oh-my-zsh.sh
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+#
+alias szh="source $HOME/.zshrc"
+
+alias j=just
+alias jg="just --justfile=$HOME/justfile"
+
+alias v=vim
+alias dm=yadm
 
 alias port="sudo lsof -PiTCP -sTCP:LISTEN"
 
@@ -116,10 +124,8 @@ export PATH=$PATH:$GOPATH/bin
 export PATH="$PATH:/Users/sangilmo.fsl/.local/bin"
 eval "$(/usr/local/bin/mise activate zsh)"
 
-## [Completion]
-## Completion scripts setup. Remove the following line to uninstall
-[[ -f /Users/sangilmo.fsl/.dart-cli-completion/zsh-config.zsh ]] && . /Users/sangilmo.fsl/.dart-cli-completion/zsh-config.zsh || true
-## [/Completion]
-
 fpath=( ~/.zfunc "${fpath[@]}" )
 autoload -U compinit; compinit
+
+
+
