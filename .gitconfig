@@ -1,0 +1,43 @@
+[user]
+    name = SangIlMo
+    email = sangil.mo@fairsquarelab.com
+
+[init]
+    defaultBranch = main
+
+[core]
+    editor = vim                   # 기본 편집기 설정
+    autocrlf = input               # CRLF 문제 해결 (Linux/Mac 환경)
+    pager = less                   # Git 출력에 페이저 사용
+
+[alias]
+    st = status                    # git st로 status 실행
+    ci = commit                    # git ci로 commit 실행
+    co = checkout                  # git co로 checkout 실행
+    br = branch                    # git br로 branch 실행
+		# lg = log --oneline --graph --all --decorate   # 보기 좋은 로그
+    last = log -1 HEAD             # 마지막 커밋 로그 보기
+    amend = commit --amend         # 마지막 커밋 수정
+		lg = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)' --all
+		lgcur = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(auto)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
+
+[color]
+    ui = auto                      # 자동으로 색상 설정
+
+[diff]
+    tool = vimdiff                 # 기본 diff 도구 설정
+    renames = true                 # 파일 이름 변경 감지
+
+[push]
+    default = simple               # 원격과 현재 브랜치 간단히 매칭
+
+[fetch]
+    prune = true                   # 불필요한 원격 브랜치 자동 제거
+
+[merge]
+    tool = vimdiff                 # 기본 머지 도구 설정
+    conflictstyle = diff3          # 충돌 표시 스타일
+
+[core]
+    excludesfile = ~/.gitignore_global  # 글로벌 gitignore 파일 설정
+

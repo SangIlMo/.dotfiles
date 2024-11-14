@@ -1,0 +1,16 @@
+# macOS 관련 파일
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows 관련 파일
+Thumbs.db
+Desktop.ini
+
+# Vim 임시 파일
+*.swp
+*.swo
+*.swn
+
+# Mise 관련 파일
+.mise.toml
