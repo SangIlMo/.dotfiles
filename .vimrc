@@ -53,11 +53,15 @@ nnoremap <C-s> :w<CR>     " Ctrl+s로 저장
 nnoremap <C-q> :q<CR>     " Ctrl+q로 종료
 vnoremap <C-c> "+y        " 비주얼 모드에서 Ctrl+c로 클립보드 복사
 inoremap jk <Esc>         " 입력 모드에서 jk를 눌러서 빠르게 종료
+nnoremap <Enter> o<Esc> " Shift+Enter를 눌렀을 때 현재 줄 아래에 새 줄을 추가하고 커서를 이동
+inoremap <Enter> <Esc>o
+
 
 " 플러그인 설정
 call plug#begin('~/.vim/plugged')
 Plug 'sheerun/vim-polyglot'
 Plug 'morhetz/gruvbox'
+Plug 'tpope/vim-commentary'  " vim-commentary 플러그인 설치
 call plug#end()
 
 " ==============
