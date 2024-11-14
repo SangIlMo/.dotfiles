@@ -10,3 +10,14 @@ fi
 # vim에서 플러그인을 자동으로 설치
 vim +PlugInstall +qall
 
+# Mise 설치
+if ! command -v mise &> /dev/null; then
+  echo "Installing Mise..."
+  curl https://mise.run | sh
+fi
+
+# # Zsh 환경에서 Mise 활성화
+# echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
+
+# zshrc 파일 업데이트 후 적용
+source ~/.zshrc
