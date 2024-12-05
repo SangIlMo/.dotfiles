@@ -127,5 +127,5 @@ eval "$(/usr/local/bin/mise activate zsh)"
 fpath=( ~/.zfunc "${fpath[@]}" )
 autoload -U compinit; compinit
 
-
-
+# fzf 기본 설정
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
