@@ -1,0 +1,6 @@
+[settings]
+experimental = true
+
+[tools]
+ripgrep = "latest"
+node = "latest"
