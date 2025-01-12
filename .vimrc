@@ -41,17 +41,14 @@ set linebreak             " 단어 단위로 줄 바꿈
 " =============================
 " 기타 편리한 설정
 " =============================
-set clipboard=unnamedplus " 시스템 클립보드와 연동
+set clipboard=unnamed,unnamedplus      " 시스템 클립보드와 연동
 set backspace=indent,eol,start " 백스페이스로 들여쓰기 삭제 허용
 set hidden                " 파일 수정 중 다른 파일 열기 허용
 set mouse=a               " 마우스 사용 허용
-
 " =============================
 " 편리한 키 매핑
 " =============================
-nnoremap <C-s> :w<CR>     " Ctrl+s로 저장
-nnoremap <C-q> :q<CR>     " Ctrl+q로 종료
-vnoremap <C-c> "+y        " 비주얼 모드에서 Ctrl+c로 클립보드 복사
+" 모든 yanking, deleting 명령을 클립보드에 동기화
 inoremap jk <Esc>         " 입력 모드에서 jk를 눌러서 빠르게 종료
 
 
@@ -60,6 +57,7 @@ call plug#begin('~/.vim/plugged')
 Plug 'sheerun/vim-polyglot'
 Plug 'morhetz/gruvbox'
 Plug 'tpope/vim-commentary'  " vim-commentary 플러그인 설치
+Plug 'ntpeters/vim-better-whitespace'
 call plug#end()
 
 " ==============
@@ -75,3 +73,7 @@ colorscheme gruvbox
 " polyglot은 설치 후 자동으로 언어에 맞는 하이라이트 적용
 " 특정 언어만 강조하고 싶다면 다음과 같이 설정 가능:
 " let g:polyglot_disabled = ['html', 'css']
+"
+let g:better_whitespace_ctermcolor='red'
+let g:better_whitespace_enabled=1
+let g:strip_whitespace_on_save=1
