@@ -16,8 +16,13 @@ if ! command -v mise &> /dev/null; then
   curl https://mise.run | sh
 fi
 
-# # Zsh 환경에서 Mise 활성화
+# Zsh 환경에서 Mise 활성화 (zshrc에 포함되어 있음)
 # echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
+
+# oh-my-zsh 설치 (미설치 된 경우만)
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --keep-zshrc
+fi
 
 # zshrc 파일 업데이트 후 적용
 source ~/.zshrc
