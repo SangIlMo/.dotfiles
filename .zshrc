@@ -122,10 +122,11 @@ export PATH=$PATH:$GOPATH/bin
 
 # Created by `pipx` on 2024-06-01 04:11:44
 export PATH="$PATH:/Users/sangilmo.fsl/.local/bin"
-eval "$(/usr/local/bin/mise activate zsh)"
 
 fpath=( ~/.zfunc "${fpath[@]}" )
 autoload -U compinit; compinit
 
 # fzf 기본 설정
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+eval "$($HOME/.local/bin/mise activate zsh)"
