@@ -111,7 +111,6 @@ alias m="mise run"
 
 alias port="sudo lsof -PiTCP -sTCP:LISTEN"
 
-. /usr/local/opt/asdf/libexec/asdf.sh
 fpath=(/Users/sangilmo.fsl/.local/share/zsh-completion/completions $fpath) # avalanche completion
 rm -f ~/.zcompdump; compinit # avalanche completion
 
