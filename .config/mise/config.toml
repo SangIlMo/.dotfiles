@@ -5,3 +5,5 @@ experimental = true
 ripgrep = "latest"
 node = "latest"
 fzf = "latest"
+watchexec = "latest"
+bat = "latest"

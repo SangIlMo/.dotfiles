@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE dir="{{cwd}}"
+
+# 이전 날짜까지 모두 지운다.
+# branch 이름이 {date}/... 인 경우만 가능
+
+# date=$0
+
+# git branch | grep -E $0 | xargs git branch -D
+
+# 현재 날짜 가져오기 (MMDD 형식)
+TODAY=$(date +"%m%d")
+
+# 삭제할 브랜치 목록 가져오기
+BRANCHES=$(git branch | grep -Eo "[0-9]{4}/.*" | awk -F'/' '{print $1}' | sort | uniq)
+
+for BRANCH in $BRANCHES; do
+  if [[ "$BRANCH" =~ ^[0-9]{4}$ && "$BRANCH" -lt "$TODAY" ]]; then
+    # echo "Deleting local branches starting with: $BRANCH"
+
+    # 로컬 브랜치 삭제
+    git branch | grep "^ *$BRANCH" | while read -r BR; do
+      # echo "Deleting local branch: $BR"
+      git branch -D "$BR"
+    done
+  fi
+done
+
+echo "=== Current Branch ==="
+git branch | cat
+
