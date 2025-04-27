@@ -4,19 +4,30 @@
 # 이전 날짜까지 모두 지운다.
 # branch 이름이 {date}/... 인 경우만 가능
 
-# date=$0
 
 # git branch | grep -E $0 | xargs git branch -D
 
-# 현재 날짜 가져오기 (MMDD 형식)
-TODAY=$(date +"%m%d")
+# # 현재 날짜 가져오기 (MMDD 형식)
+# TODAY=$(date +"%m%d")
+#
+date=$0
+
+if [ -n "$1" ]; then
+  target_date=$1
+else
+  target_date=$(date +"%m%d")
+fi
+
+echo "Target date: $target_date"
 
 # 삭제할 브랜치 목록 가져오기
 BRANCHES=$(git branch | grep -Eo "[0-9]{4}/.*" | awk -F'/' '{print $1}' | sort | uniq)
 
+echo $BRANCHES
+
 for BRANCH in $BRANCHES; do
-  if [[ "$BRANCH" =~ ^[0-9]{4}$ && "$BRANCH" -lt "$TODAY" ]]; then
-    # echo "Deleting local branches starting with: $BRANCH"
+  if [[ "$BRANCH" =~ ^[0-9]{4}$ && $((10#$BRANCH)) -lt $((10#$target_date)) ]]; then
+    echo "Deleting local branches starting with: $BRANCH"
 
     # 로컬 브랜치 삭제
     git branch | grep "^ *$BRANCH" | while read -r BR; do
