@@ -107,6 +107,7 @@ alias jg="just --justfile=$HOME/justfile"
 
 alias v=vim
 alias dm=yadm
+alias m="mise run"
 
 alias port="sudo lsof -PiTCP -sTCP:LISTEN"
 
@@ -130,3 +131,13 @@ autoload -U compinit; compinit
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 eval "$($HOME/.local/bin/mise activate zsh)"
+
+
+_fzf_complete_m() {
+  _fzf_complete --min-height 15 -- "$@" < <(
+    mise tasks ls --no-header
+  )
+}
+_fzf_complete_m_post() {
+  awk '{print $1}'
+}
