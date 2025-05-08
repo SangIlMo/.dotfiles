@@ -105,7 +105,7 @@ alias szh="source $HOME/.zshrc"
 alias j=just
 alias jg="just --justfile=$HOME/justfile"
 
-alias v=vim
+alias v=nvim
 alias dm=yadm
 alias m="mise run"
 

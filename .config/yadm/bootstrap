@@ -24,5 +24,13 @@ if [ ! -d "$HOME/.oh-my-zsh" ]; then
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --keep-zshrc
 fi
 
+# nvim 설치
+if ! command -v nvim &> /dev/null; then
+  echo "Installing Neovim..."
+  brew install neovim
+  curl https://mise.run | sh
+  git clone https://github.com/folke/lazy.nvim.git ~/.local/share/nvim/lazy/lazy.nvim
+fi
+
 # zshrc 파일 업데이트 후 적용
 source ~/.zshrc
