@@ -1,7 +1,8 @@
 " 기본 설정 {{{
+set fdm=marker            " foldmethod = marker,  indent ...
+
 set nocompatible          " Vi 호환 모드를 끄기
 syntax on                 " 문법 강조 활성화
-filetype plugin indent on " 파일 유형에 따른 플러그인 및 들여쓰기 설정
 
 set number                " 줄 번호 표시
 set relativenumber        " 상대 번호 표시 (현재 줄을 기준으로)
@@ -53,6 +54,7 @@ Plug 'sheerun/vim-polyglot'
 Plug 'morhetz/gruvbox'
 Plug 'tpope/vim-commentary'  " vim-commentary 플러그인 설치
 Plug 'ntpeters/vim-better-whitespace'
+Plug 'vitalk/vim-simple-todo'
 call plug#end()
 " }}}
 
