@@ -1,5 +1,8 @@
+# [env]
+
 [settings]
 experimental = true
+env_file = "~/.config/mise/env.toml"
 
 [tools]
 ripgrep = "latest"
@@ -8,3 +11,7 @@ fzf = "latest"
 watchexec = "latest"
 bat = "latest"
 just = "latest"
+"npm:@anthropic-ai/claude-code" = "latest"
+pnpm = "latest"
+stylua = "latest"
+shfmt = "latest"
