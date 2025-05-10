@@ -15,3 +15,10 @@ vim.opt.splitright = true
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.g.mapleader = " "
+
+-- setting auto read
+vim.opt.autoread = true
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
+	pattern = "*",
+	command = "checktime",
+})
