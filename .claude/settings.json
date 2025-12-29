@@ -1,0 +1,15 @@
+{
+  "model": "sonnet",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/korean-branch-trigger.py"
+          }
+        ]
+      }
+    ]
+  }
+}
