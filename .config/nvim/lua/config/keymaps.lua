@@ -37,9 +37,14 @@ keymap("n", "<leader>e", function()
 		api.tree.open()
 	end
 end, { desc = "Toggle or focus NvimTree" })
+
 keymap("n", "<leader>fd", function()
-	require("telescope.builtin").lsp_definitions()
+	require("telescope.builtin").lsp_definitions(layout_opts)
 end, { desc = "Telescope: Go to Definition" })
+
+keymap("n", "<leader>gr", function()
+	require("telescope.builtin").lsp_references(layout_opts)
+end, { desc = "LSP: Show references (usages)" })
 
 -- 전체 진단 리스트 Telescope로 보기
 keymap("n", "<leader>dl", function()

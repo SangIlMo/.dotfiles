@@ -120,6 +120,9 @@ rm -f ~/.zcompdump; compinit # avalanche completion
 # export NVM_DIR=~/.nvm
 # source $(brew --prefix nvm)/nvm.sh
 
+# Mise 설정
+eval "$($HOME/.local/bin/mise activate zsh)"
+
 export GOPATH=/Users/sangilmo.fsl/go
 export PATH=$PATH:$GOPATH/bin
 
@@ -132,5 +135,12 @@ autoload -U compinit; compinit
 # fzf 기본 설정
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-eval "$($HOME/.local/bin/mise activate zsh)"
+export OPENSSL_LIB_DIR="$(brew --prefix openssl@3)/lib"
+export OPENSSL_INCLUDE_DIR="$(brew --prefix openssl@3)/include"
+export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig"
+export LIBRARY_PATH="$(brew --prefix openssl@3)/lib"
 
+# zkstack completion
+autoload -Uz compinit
+compinit
+source "/Users/sangilmo.fsl/.zsh/completion/_zkstack.zsh"

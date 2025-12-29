@@ -3,16 +3,20 @@
 [settings]
 experimental = true
 env_file = "~/.config/mise/env.toml"
+idiomatic_version_file_enable_tools = []
 
 [tools]
 ripgrep = "latest"
-node = "latest"
+node = "20"
 fzf = "latest"
 watchexec = "latest"
 bat = "latest"
 just = "latest"
-"npm:@anthropic-ai/claude-code" = "latest"
 pnpm = "latest"
 stylua = "latest"
 shfmt = "latest"
 python = "latest"
+dust = "latest"
+"npm:@anthropic-ai/claude-code" = "latest"
+"npm:@openai/codex" = "latest"
+yadm = "latest"

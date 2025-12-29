@@ -17,3 +17,7 @@ mise*.toml
 
 # cluade
 *.claude
+
+# terraform
+*.plan
+**/.terraform

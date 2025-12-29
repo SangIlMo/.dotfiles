@@ -18,8 +18,12 @@
 		# lg = log --oneline --graph --all --decorate   # 보기 좋은 로그
     last = log -1 HEAD             # 마지막 커밋 로그 보기
     amend = commit --amend         # 마지막 커밋 수정
-		lg = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)' --all
-		lgcur = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(auto)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
+
+    lg = "!f() { git log --graph --abbrev-commit --decorate=short --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)' $(git for-each-ref --format='%(refname)' refs/heads refs/remotes/origin/main refs/remotes/origin/deployment refs/remotes/origin/omp-deployment); }; f"
+
+    lgall = log --graph --abbrev-commit --decorate=short --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)' --all
+
+    lgcur = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(auto)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
 
 [color]
     ui = auto                      # 자동으로 색상 설정
