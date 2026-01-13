@@ -11,5 +11,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "ast-grep@ast-grep-marketplace": true
   }
 }
