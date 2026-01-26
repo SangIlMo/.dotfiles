@@ -32,5 +32,11 @@ if ! command -v nvim &> /dev/null; then
   git clone https://github.com/folke/lazy.nvim.git ~/.local/share/nvim/lazy/lazy.nvim
 fi
 
+# terminal-notifier 설치 (Claude Code 알림용)
+if ! command -v terminal-notifier &> /dev/null; then
+  echo "Installing terminal-notifier for Claude Code notifications..."
+  brew install terminal-notifier
+fi
+
 # zshrc 파일 업데이트 후 적용
 source ~/.zshrc

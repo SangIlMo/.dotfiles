@@ -10,9 +10,31 @@
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"event\":\"notification\",\"cwd\":\"'\"$PWD\"'\"}' | ~/.claude/hooks/notify.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"event\":\"stop\",\"cwd\":\"'\"$PWD\"'\"}' | ~/.claude/hooks/notify.sh"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
-    "ast-grep@ast-grep-marketplace": true
+    "ast-grep@ast-grep-marketplace": true,
+    "openzeppelin-erc@fairsquarelab-plugins": true,
+    "feature-dev@claude-plugins-official": true
   }
 }
