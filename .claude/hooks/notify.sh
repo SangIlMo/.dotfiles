@@ -5,8 +5,16 @@
 
 set -eo pipefail
 
+# 디버그 로그 설정
+DEBUG_LOG="$HOME/.claude/hooks/notify.log"
+mkdir -p "$(dirname "$DEBUG_LOG")"
+
 # 1. JSON 입력 읽기
 INPUT=$(cat)
+
+# 디버그: 입력 로깅
+echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$DEBUG_LOG"
+echo "INPUT: $INPUT" >> "$DEBUG_LOG"
 
 # 2. 이벤트 타입과 작업 디렉토리 파싱 (jq 사용)
 if command -v jq &> /dev/null; then
@@ -64,22 +72,28 @@ else
   MESSAGE="Claude Code is waiting for you"
 fi
 
+echo "EVENT: $EVENT, TITLE: $TITLE, SUBTITLE: $SUBTITLE, MESSAGE: $MESSAGE" >> "$DEBUG_LOG"
+
 if command -v terminal-notifier &> /dev/null; then
   # terminal-notifier 사용 (배너가 더 잘 표시됨)
+  echo "Using terminal-notifier" >> "$DEBUG_LOG"
   terminal-notifier \
-    -sender com.anthropic.claudefordesktop \
     -title "$TITLE" \
     -subtitle "$SUBTITLE" \
     -message "$MESSAGE" \
     -sound "${SOUND##*/}" \
-    2>&1 | logger -t claude-notify || true
+    2>&1 | tee -a "$DEBUG_LOG" | logger -t claude-notify || true
 elif command -v osascript &> /dev/null; then
   # osascript fallback (terminal-notifier가 없는 경우)
-  osascript -e "display notification \"${MESSAGE}\" with title \"${TITLE}\" subtitle \"${SUBTITLE}\" sound name \"${SOUND##*/}\"" 2>&1 | logger -t claude-notify || {
+  echo "Using osascript" >> "$DEBUG_LOG"
+  osascript -e "display notification \"${MESSAGE}\" with title \"${TITLE}\" subtitle \"${SUBTITLE}\" sound name \"${SOUND##*/}\"" 2>&1 | tee -a "$DEBUG_LOG" | logger -t claude-notify || {
     # osascript 실패 시 더 간단한 형식으로 재시도
-    osascript -e "display notification \"${MESSAGE}\" with title \"${TITLE}\"" 2>&1 | logger -t claude-notify || true
+    osascript -e "display notification \"${MESSAGE}\" with title \"${TITLE}\"" 2>&1 | tee -a "$DEBUG_LOG" | logger -t claude-notify || true
   }
 fi
+
+echo "Notification sent at $(date '+%H:%M:%S')" >> "$DEBUG_LOG"
+echo "" >> "$DEBUG_LOG"
 
 # 6. 사운드 재생 (백그라운드)
 # terminal-notifier는 -sound 옵션으로 사운드를 재생하므로 별도 재생 불필요
