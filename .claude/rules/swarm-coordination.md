@@ -408,7 +408,7 @@ Swarm 완료 후 수정 작업은 적절한 모드 선택
 if swarm_findings.critical_count <= 2:
     mode = Sequential  # 소규모 수정
 elif swarm_findings.files_affected >= 5:
-    mode = External Parallel  # 대규모 수정
+    mode = Internal Swarms  # 대규모 수정 (병렬 처리)
 else:
     mode = Sequential  # 기본값
 ```
