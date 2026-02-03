@@ -144,3 +144,4 @@ export LIBRARY_PATH="$(brew --prefix openssl@3)/lib"
 autoload -Uz compinit
 compinit
 source "/Users/sangilmo.fsl/.zsh/completion/_zkstack.zsh"
+export PATH="$HOME/.daml/bin:$PATH"
