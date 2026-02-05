@@ -15,9 +15,6 @@ Desktop.ini
 # Mise 관련 파일
 mise*.toml
 
-# cluade
-*.claude
-
 # terraform
 *.plan
 **/.terraform
