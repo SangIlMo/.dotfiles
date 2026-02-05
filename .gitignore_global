@@ -18,3 +18,8 @@ mise*.toml
 # terraform
 *.plan
 **/.terraform
+
+# claude
+# 홈폴더 이외다른 .claude 폴더 전체 무시
+**/.claude
+
