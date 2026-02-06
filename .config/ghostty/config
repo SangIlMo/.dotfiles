@@ -1,0 +1,37 @@
+# Font (from wezterm config)
+font-family = JetBrainsMono Nerd Font
+font-family = Monaco
+font-size = 13
+font-thicken = true
+
+# Theme
+theme = catppuccin-mocha
+
+# Cursor
+cursor-style = block
+cursor-style-blink = false
+
+# Window
+window-padding-x = 4
+window-padding-y = 4
+window-decoration = auto
+macos-titlebar-style = tabs
+
+# Scrollback
+scrollback-limit = 10000000
+
+# Clipboard
+copy-on-select = true
+clipboard-read = allow
+clipboard-write = allow
+
+# Shell integration
+shell-integration = detect
+shell-integration-features = cursor,sudo,title
+
+# macOS
+macos-option-as-alt = true
+quick-terminal-position = top
+
+# Keybinds
+keybind = super+shift+enter=new_window
