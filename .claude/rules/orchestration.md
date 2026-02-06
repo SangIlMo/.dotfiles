@@ -1,4 +1,4 @@
-# Claude Orchestration Rule (v2.0 - Parallel-First)
+# Claude Orchestration Rule (v3.0 - Agent Teams)
 
 ## 핵심 원칙
 
@@ -7,25 +7,32 @@
 1. **기본값은 병렬**: 병렬 가능하면 항상 병렬 실행
 2. **Sequential은 예외**: 명확한 의존성이 있을 때만 순차 실행
 3. **자동 감지 우선**: 사용자가 명시하지 않아도 자동으로 병렬 선택
+4. **Agent Teams 활용**: 다각도 분석/비교 시 Agent Teams 모드 사용
 
 ---
 
 ## 실행 모드 우선순위
 
-### 1. Internal Parallel (기본) ⭐
+### 1. Internal Parallel (기본)
 - **조건**: 읽기/분석 작업, 독립적인 다중 작업
 - **도구**: Claude Code Task tool (subagent)
 - **예시**: 코드베이스 탐색, 다중 파일 분석, 패턴 검색, 단일 관점 리뷰
 
-### 2. Internal Swarms (집계 필요 시)
+### 2. Agent Teams (집계 필요 시)
 - **조건**: 독립적인 다중 분석/리뷰 작업 (3개+), 결과 집계 필요
-- **도구**: Task tool + Subagents + Shared Storage
+- **도구**: Custom Sub-agents (`~/.claude/agents/`) + Agent Teams 기능
+- **에이전트**: security-sentinel, performance-oracle, architecture-strategist, framework-researcher, service-architect
+- **특징**:
+  - YAML frontmatter 기반 서브에이전트 자동 위임
+  - 에이전트별 tool 제한 및 model 선택
+  - Persistent Memory로 세션 간 학습
+  - 네이티브 메시징 및 자동 태스크 관리
 - **예시**:
   - 다각도 코드 리뷰 (보안 + 성능 + 아키텍처)
   - 병렬 연구 (프레임워크 비교 3개+)
   - 대규모 테스트 생성 (여러 모듈 동시)
 
-### 3. Sequential (예외적 사용만) ⚠️
+### 3. Sequential (예외적 사용만)
 - **조건**: 파일 간 의존성 명확, 디버깅, 트랜잭션 작업
 - **도구**: 일반 Claude Code
 - **예시**: 버그 수정, 단계별 디버깅, 의존성 있는 수정
@@ -46,9 +53,9 @@
 | **범위** | "모든", "전체", "각각", "여러" | "모든 Controller 확인해줘" |
 | **읽기** | "읽어", "확인", "보여", "목록" | "전체 파일 목록 보여줘" |
 
-### 즉시 Swarms 선택 키워드
+### 즉시 Agent Teams 선택 키워드
 
-다음 조건은 자동으로 **Internal Swarms** 선택:
+다음 조건은 자동으로 **Agent Teams** 선택:
 
 | 패턴 | 예시 요청 |
 |------|-----------|
@@ -75,7 +82,7 @@
 ```
 ┌─────────────────────────────────────────┐
 │ 1. 키워드 매칭 (자동 트리거)           │
-│    → Parallel/Swarms 키워드 있음?     │
+│    → Parallel/Agent Teams 키워드 있음? │
 │       YES: 해당 모드 선택             │
 │       NO: Step 2                      │
 └─────────────────────────────────────────┘
@@ -107,16 +114,16 @@
 
 ---
 
-## 새로운 자동 판단 기준
+## 자동 판단 기준
 
 | 작업 특성 | 자동 선택 모드 | 트리거 조건 |
 |----------|----------------|-------------|
 | **읽기 전용 작업** | Internal Parallel | 파일 읽기, 코드 분석, 패턴 검색 |
 | **여러 파일 분석** | Internal Parallel | 2개 이상 파일 |
 | **단일 관점 리뷰** | Internal Parallel | "리뷰해줘", "검토해줘" |
-| **다각도 분석** | Internal Swarms | 3개 이상 독립적 관점 |
-| **비교 작업** | Internal Swarms | 3개 이상 옵션 비교 |
-| **대규모 생성** | Internal Swarms | 10개 이상 파일/테스트 |
+| **다각도 분석** | Agent Teams | 3개 이상 독립적 관점 |
+| **비교 작업** | Agent Teams | 3개 이상 옵션 비교 |
+| **대규모 생성** | Agent Teams | 10개 이상 파일/테스트 |
 | **단일 파일 수정** | Internal Parallel | 의존성 없는 단순 수정 (병렬 가능) |
 | **디버깅/수정** | Sequential | 에러 추적, 단계별 수정 |
 | **의존성 있는 작업** | Sequential | A → B → C 순서 필수 |
@@ -128,7 +135,7 @@
 작업 분석 후 다음 형식으로 자동 선택을 명시:
 
 ```
-🤖 자동 모드 선택: [Internal Parallel/Internal Swarms/Sequential]
+🤖 자동 모드 선택: [Internal Parallel/Agent Teams/Sequential]
 
 분석:
 - 작업 유형: [읽기/쓰기/혼합]
@@ -174,23 +181,24 @@
 [3개 Explore 에이전트를 병렬 실행합니다]
 ```
 
-### 자동 Swarms 선택
+### 자동 Agent Teams 선택
 
 **요청**: "현재 인증 시스템을 보안, 성능, 유지보수성 측면에서 평가해줘"
 
 **Claude 응답**:
 ```
-🤖 자동 모드 선택: Internal Swarms
+🤖 자동 모드 선택: Agent Teams
 
 분석:
 - 작업 유형: 다각도 분석
 - 관점 수: 3개 (보안, 성능, 유지보수성)
 - 의존성: 독립적인 분석
 - 트리거 키워드: "평가", 다중 관점
+- 서브에이전트: security-sentinel, performance-oracle, architecture-strategist
 
-선택 이유: 3개 독립적 관점, 결과 집계 필요
+선택 이유: 3개 독립적 관점, 전문 서브에이전트 활용, 결과 집계 필요
 
-[3개 전문 에이전트를 생성하고 병렬 실행합니다]
+[3개 전문 에이전트를 Agent Teams로 실행합니다]
 ```
 
 ### Sequential 예외
@@ -217,16 +225,16 @@
 
 **다음 경우에만 Sequential 사용**:
 
-- ✅ **파일 간 의존성이 명확함** (A 수정 후 B 수정 필요)
-- ✅ **디버깅 중** (에러 추적, 단계별 수정)
-- ✅ **트랜잭션 작업** (DB 마이그레이션, 설정 변경)
-- ✅ **사용자가 명시** ("순차로", "단계별로")
+- **파일 간 의존성이 명확함** (A 수정 후 B 수정 필요)
+- **디버깅 중** (에러 추적, 단계별 수정)
+- **트랜잭션 작업** (DB 마이그레이션, 설정 변경)
+- **사용자가 명시** ("순차로", "단계별로")
 
 **Sequential이 아닌 경우**:
 
-- ❌ 단순히 "파일 1-2개"라는 이유만으로 (병렬 가능하면 Parallel)
-- ❌ 테스트 실행만 하는 경우 (병렬 실행 가능)
-- ❌ 단일 파일 수정이지만 의존성 없는 경우
+- 단순히 "파일 1-2개"라는 이유만으로 (병렬 가능하면 Parallel)
+- 테스트 실행만 하는 경우 (병렬 실행 가능)
+- 단일 파일 수정이지만 의존성 없는 경우
 
 ---
 
@@ -238,18 +246,21 @@
 |-------------|-----------|------|
 | "순차로 해줘", "단계별로" | Sequential | 자동 판단 무시하고 Sequential 실행 |
 | "병렬로 해줘", "동시에" | Internal Parallel | 강제로 병렬 실행 |
-| "스웜으로", "다각도로" | Internal Swarms | 강제로 Swarms 모드 |
+| "팀으로", "다각도로", "에이전트 팀으로" | Agent Teams | 강제로 Agent Teams 모드 |
 
 ---
 
-## 세션 간 데이터 공유
+## 서브에이전트 목록
 
-Internal Swarms 모드에서 세션 간 데이터 공유:
-- 공유 디렉토리: `~/.claude/orchestration/`
-  - `issues/` - 리뷰에서 발견한 이슈
-  - `tasks/` - 할당된 작업
-  - `results/` - 완료된 결과
-  - `sync/` - 세션 간 동기화 데이터
+Agent Teams 모드에서 사용 가능한 전문 서브에이전트:
+
+| 에이전트 | 역할 | 자동 위임 트리거 |
+|---------|------|-----------------|
+| `security-sentinel` | 보안 취약점 리뷰 | "보안", "security", "취약점" |
+| `performance-oracle` | 성능 분석 | "성능", "performance", "최적화" |
+| `architecture-strategist` | 아키텍처 품질 분석 | "아키텍처", "설계", "SOLID" |
+| `framework-researcher` | 프레임워크/라이브러리 평가 | "비교", "추천", "프레임워크" |
+| `service-architect` | 마이크로서비스 설계 | "서비스 설계", "API 설계" |
 
 ---
 
@@ -257,17 +268,17 @@ Internal Swarms 모드에서 세션 간 데이터 공유:
 
 ### 성공 기준
 
-- ✅ 읽기 작업의 80% 이상이 Parallel 선택
-- ✅ 3개 이상 독립 작업은 자동으로 Swarms 선택
-- ✅ Sequential은 전체의 20% 이하로 감소
-- ✅ 사용자가 모드 선택 이유를 명확히 이해
+- 읽기 작업의 80% 이상이 Parallel 선택
+- 3개 이상 독립 작업은 자동으로 Agent Teams 선택
+- Sequential은 전체의 20% 이하로 감소
+- 사용자가 모드 선택 이유를 명확히 이해
 
 ### 모드 선택 통계 (참고)
 
 | 모드 | 목표 비율 | 실제 사용 사례 |
 |------|-----------|----------------|
 | Internal Parallel | 60-70% | 읽기, 분석, 단일 관점 리뷰 |
-| Internal Swarms | 10-20% | 다각도 분석, 비교, 대규모 생성 |
+| Agent Teams | 10-20% | 다각도 분석, 비교, 대규모 생성 |
 | Sequential | 10-20% | 디버깅, 의존성 작업 |
 
 ---
@@ -276,17 +287,18 @@ Internal Swarms 모드에서 세션 간 데이터 공유:
 
 ### 기존 Rule과의 호환성
 
-- **swarm-coordination.md**: Swarms 모드 상세 구현 (변경 불필요)
+- **swarm-coordination.md**: Agent Teams 조정 패턴 및 결과 집계 포맷
 - **auto-commit-after-tests.md**: 모든 모드와 호환 (변경 불필요)
 - **git-push-protection.md**: 모든 모드와 호환 (변경 불필요)
 
 ### 버전 히스토리
 
 - **v1.0**: Sequential 우선 (기존 방식)
-- **v2.0**: Parallel-First 원칙 도입 (현재)
+- **v2.0**: Parallel-First 원칙 도입
+- **v3.0**: Agent Teams 통합 (Internal Swarms 대체)
 
 ---
 
-**Last Updated**: 2025-02-05
-**Version**: 2.0.0
-**Status**: Production Ready ✅
+**Last Updated**: 2026-02-06
+**Version**: 3.0.0
+**Status**: Production Ready
