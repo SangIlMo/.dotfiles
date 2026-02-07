@@ -7,7 +7,7 @@ idiomatic_version_file_enable_tools = []
 
 [tools]
 ripgrep = "latest"
-node = "20"
+node = "latest"
 fzf = "latest"
 watchexec = "latest"
 bat = "latest"
@@ -18,5 +18,4 @@ shfmt = "latest"
 python = "latest"
 dust = "latest"
 "npm:@openai/codex" = "latest"
-yadm = "latest"
 jq = "latest"

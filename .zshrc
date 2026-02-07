@@ -140,8 +140,6 @@ export OPENSSL_INCLUDE_DIR="$(brew --prefix openssl@3)/include"
 export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig"
 export LIBRARY_PATH="$(brew --prefix openssl@3)/lib"
 
-# zkstack completion
 autoload -Uz compinit
 compinit
-source "/Users/sangilmo.fsl/.zsh/completion/_zkstack.zsh"
 export PATH="$HOME/.daml/bin:$PATH"
