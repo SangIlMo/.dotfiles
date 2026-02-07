@@ -32,6 +32,12 @@ if ! command -v nvim &> /dev/null; then
   git clone https://github.com/folke/lazy.nvim.git ~/.local/share/nvim/lazy/lazy.nvim
 fi
 
+# D2Coding 폰트 설치 (Ghostty 한글 fallback)
+if ! brew list --cask font-d2coding &>/dev/null; then
+  echo "Installing D2Coding font..."
+  brew install --cask font-d2coding
+fi
+
 # Ghostty 설치
 if [ ! -d "/Applications/Ghostty.app" ]; then
   echo "Installing Ghostty..."
