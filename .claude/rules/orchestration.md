@@ -1,4 +1,4 @@
-# Claude Orchestration Rule (v3.0 - Agent Teams)
+# Claude Orchestration Rule (v3.1 - Native Agent Teams)
 
 ## 핵심 원칙
 
@@ -7,7 +7,7 @@
 1. **기본값은 병렬**: 병렬 가능하면 항상 병렬 실행
 2. **Sequential은 예외**: 명확한 의존성이 있을 때만 순차 실행
 3. **자동 감지 우선**: 사용자가 명시하지 않아도 자동으로 병렬 선택
-4. **Agent Teams 활용**: 다각도 분석/비교 시 Agent Teams 모드 사용
+4. **Agent Teams 활용**: 다각도 분석/비교 시 네이티브 Agent Teams 사용
 
 ---
 
@@ -19,23 +19,42 @@
 - **예시**: 코드베이스 탐색, 다중 파일 분석, 패턴 검색, 단일 관점 리뷰
 
 ### 2. Agent Teams (집계 필요 시)
-- **조건**: 독립적인 다중 분석/리뷰 작업 (3개+), 결과 집계 필요
-- **도구**: Custom Sub-agents (`~/.claude/agents/`) + Agent Teams 기능
-- **에이전트**: security-sentinel, performance-oracle, architecture-strategist, framework-researcher, service-architect
+- **조건**: 독립적인 다중 분석/리뷰 작업 (3개+), 결과 집계 필요, teammate 간 토론/협업 필요
+- **도구**: TeamCreate + Task(team_name, name) + SendMessage
+- **디스플레이**: tmux split pane (각 teammate 별도 패널)
+- **Teammate**: security-sentinel, performance-oracle, architecture-strategist, framework-researcher, service-architect
 - **특징**:
-  - YAML frontmatter 기반 서브에이전트 자동 위임
-  - 에이전트별 tool 제한 및 model 선택
+  - TeamCreate로 팀 생성, Task tool로 teammate spawn
+  - teammate별 tool 제한 및 model 선택 (`~/.claude/agents/`)
+  - SendMessage로 네이티브 메시징 (자동 전달, 폴링 불필요)
+  - 공유 TaskList로 자동 태스크 관리 (파일 락 기반 claim)
+  - teammate 간 직접 대화 (tmux 패널 클릭 또는 Shift+Up/Down)
+  - Plan approval로 복잡한 작업 승인 관리
+  - Delegate mode로 Leader 조정 전용 모드
   - Persistent Memory로 세션 간 학습
-  - 네이티브 메시징 및 자동 태스크 관리
 - **예시**:
   - 다각도 코드 리뷰 (보안 + 성능 + 아키텍처)
   - 병렬 연구 (프레임워크 비교 3개+)
   - 대규모 테스트 생성 (여러 모듈 동시)
+  - 경쟁 가설 디버깅 (teammate 간 토론)
 
 ### 3. Sequential (예외적 사용만)
 - **조건**: 파일 간 의존성 명확, 디버깅, 트랜잭션 작업
 - **도구**: 일반 Claude Code
 - **예시**: 버그 수정, 단계별 디버깅, 의존성 있는 수정
+
+---
+
+## Internal Parallel vs Agent Teams 선택 기준
+
+| 기준 | Internal Parallel | Agent Teams |
+|------|-------------------|-------------|
+| **관점 수** | 1-2개 | 3개 이상 |
+| **통신 필요** | 불필요 (결과만 반환) | 필요 (teammate 간 토론/공유) |
+| **결과 형태** | 단순 집계 | 종합 분석 리포트 |
+| **토큰 비용** | 낮음 | 높음 (teammate 수에 비례) |
+| **작업 시간** | 짧음 (단일 요청) | 중-장 (복수 턴) |
+| **디스플레이** | 없음 | tmux split pane |
 
 ---
 
@@ -63,6 +82,7 @@
 | **3개 이상 비교** | "A, B, C 라이브러리 비교해줘" |
 | **종합 리뷰** | "종합적으로 리뷰해줘", "다각도로 평가해줘" |
 | **대규모 생성** | "모든 API 엔드포인트에 테스트 생성해줘" (10개+) |
+| **경쟁 가설** | "여러 가설로 조사해줘", "토론하면서 분석해줘" |
 
 ### Sequential 예외 키워드
 
@@ -124,6 +144,7 @@
 | **다각도 분석** | Agent Teams | 3개 이상 독립적 관점 |
 | **비교 작업** | Agent Teams | 3개 이상 옵션 비교 |
 | **대규모 생성** | Agent Teams | 10개 이상 파일/테스트 |
+| **경쟁 가설 조사** | Agent Teams | teammate 간 토론 필요 |
 | **단일 파일 수정** | Internal Parallel | 의존성 없는 단순 수정 (병렬 가능) |
 | **디버깅/수정** | Sequential | 에러 추적, 단계별 수정 |
 | **의존성 있는 작업** | Sequential | A → B → C 순서 필수 |
@@ -194,11 +215,14 @@
 - 관점 수: 3개 (보안, 성능, 유지보수성)
 - 의존성: 독립적인 분석
 - 트리거 키워드: "평가", 다중 관점
-- 서브에이전트: security-sentinel, performance-oracle, architecture-strategist
 
-선택 이유: 3개 독립적 관점, 전문 서브에이전트 활용, 결과 집계 필요
+선택 이유: 3개 독립적 관점, 전문 teammate 활용, 결과 집계 필요
 
-[3개 전문 에이전트를 Agent Teams로 실행합니다]
+[TeamCreate → 3개 전문 teammate spawn → tmux split pane 표시]
+Teammate:
+- security-reviewer (security-sentinel)
+- performance-reviewer (performance-oracle)
+- architecture-reviewer (architecture-strategist)
 ```
 
 ### Sequential 예외
@@ -250,17 +274,28 @@
 
 ---
 
-## 서브에이전트 목록
+## Agent Teams Teammate 목록
 
-Agent Teams 모드에서 사용 가능한 전문 서브에이전트:
+Agent Teams 모드에서 사용 가능한 전문 teammate (`~/.claude/agents/`에 정의):
 
-| 에이전트 | 역할 | 자동 위임 트리거 |
-|---------|------|-----------------|
+| Teammate | 역할 | 자동 위임 트리거 |
+|----------|------|-----------------|
 | `security-sentinel` | 보안 취약점 리뷰 | "보안", "security", "취약점" |
 | `performance-oracle` | 성능 분석 | "성능", "performance", "최적화" |
 | `architecture-strategist` | 아키텍처 품질 분석 | "아키텍처", "설계", "SOLID" |
 | `framework-researcher` | 프레임워크/라이브러리 평가 | "비교", "추천", "프레임워크" |
 | `service-architect` | 마이크로서비스 설계 | "서비스 설계", "API 설계" |
+
+### Agent Teams 실행 흐름
+
+```
+1. TeamCreate(team_name, description)
+2. TaskCreate x N (각 관점/작업별)
+3. Task(subagent_type, team_name, name, prompt) x N → tmux split pane
+4. Teammate들이 독립 작업 → SendMessage로 결과 전송 (자동 수신)
+5. Leader가 통합 리포트 생성
+6. SendMessage(type: "shutdown_request") → TeamDelete()
+```
 
 ---
 
@@ -278,7 +313,7 @@ Agent Teams 모드에서 사용 가능한 전문 서브에이전트:
 | 모드 | 목표 비율 | 실제 사용 사례 |
 |------|-----------|----------------|
 | Internal Parallel | 60-70% | 읽기, 분석, 단일 관점 리뷰 |
-| Agent Teams | 10-20% | 다각도 분석, 비교, 대규모 생성 |
+| Agent Teams | 10-20% | 다각도 분석, 비교, 대규모 생성, 경쟁 가설 |
 | Sequential | 10-20% | 디버깅, 의존성 작업 |
 
 ---
@@ -287,7 +322,7 @@ Agent Teams 모드에서 사용 가능한 전문 서브에이전트:
 
 ### 기존 Rule과의 호환성
 
-- **swarm-coordination.md**: Agent Teams 조정 패턴 및 결과 집계 포맷
+- **swarm-coordination.md**: 네이티브 Agent Teams 조정 패턴, 통신 패턴, 결과 집계 포맷
 - **auto-commit-after-tests.md**: 모든 모드와 호환 (변경 불필요)
 - **git-push-protection.md**: 모든 모드와 호환 (변경 불필요)
 
@@ -296,9 +331,10 @@ Agent Teams 모드에서 사용 가능한 전문 서브에이전트:
 - **v1.0**: Sequential 우선 (기존 방식)
 - **v2.0**: Parallel-First 원칙 도입
 - **v3.0**: Agent Teams 통합 (Internal Swarms 대체)
+- **v3.1**: 네이티브 Agent Teams 완전 도입 (TeamCreate, SendMessage, tmux split pane)
 
 ---
 
-**Last Updated**: 2026-02-06
-**Version**: 3.0.0
+**Last Updated**: 2026-02-07
+**Version**: 3.1.0
 **Status**: Production Ready
