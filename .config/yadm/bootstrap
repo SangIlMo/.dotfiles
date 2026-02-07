@@ -44,6 +44,18 @@ if [ ! -d "/Applications/Ghostty.app" ]; then
   brew install --cask ghostty
 fi
 
+# GitHub CLI 설치 (git 인증, PR 관리)
+if ! command -v gh &> /dev/null; then
+  echo "Installing GitHub CLI..."
+  brew install gh
+fi
+
+# tmux 설치 (Claude Code Agent Teams split pane)
+if ! command -v tmux &> /dev/null; then
+  echo "Installing tmux..."
+  brew install tmux
+fi
+
 # Claude Code 설치 (native)
 if ! command -v claude &> /dev/null; then
   echo "Installing Claude Code (native)..."
