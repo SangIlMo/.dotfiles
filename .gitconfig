@@ -45,3 +45,9 @@
 [core]
     excludesfile = ~/.gitignore_global  # 글로벌 gitignore 파일 설정
 
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
