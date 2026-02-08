@@ -3,6 +3,10 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "statusLine": {
+    "type": "command",
+    "command": "input=$(cat); model=$(echo \"$input\" | jq -r '.model.display_name // \"Claude\"'); dir=$(echo \"$input\" | jq -r '.workspace.current_dir // \"~\"' | sed \"s|$HOME|~|\"); remaining=$(echo \"$input\" | jq -r '.context_window.remaining_percentage // empty'); style=$(echo \"$input\" | jq -r '.output_style.name // empty'); vim=$(echo \"$input\" | jq -r '.vim.mode // empty'); status=\"$model in $dir\"; [ -n \"$remaining\" ] && status=\"$status | Context: $remaining%\"; [ -n \"$style\" ] && status=\"$status | Style: $style\"; [ -n \"$vim\" ] && status=\"$status | [$vim]\"; echo \"$status\""
+  },
   "hooks": {
     "UserPromptSubmit": [
       {

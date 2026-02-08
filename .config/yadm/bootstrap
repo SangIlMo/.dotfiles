@@ -56,6 +56,17 @@ if ! command -v tmux &> /dev/null; then
   brew install tmux
 fi
 
+# JetBrainsMono Nerd Font 설치 (tmux status bar 아이콘)
+if ! brew list --cask font-jetbrains-mono-nerd-font &>/dev/null; then
+  echo "Installing JetBrainsMono Nerd Font..."
+  brew install --cask font-jetbrains-mono-nerd-font
+fi
+
+# tmux 스크립트 실행 권한 부여
+if [ -d "$HOME/.config/tmux/scripts" ]; then
+  chmod +x "$HOME/.config/tmux/scripts/"*.sh 2>/dev/null
+fi
+
 # Claude Code 설치 (native)
 if ! command -v claude &> /dev/null; then
   echo "Installing Claude Code (native)..."
