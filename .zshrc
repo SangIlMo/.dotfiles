@@ -115,7 +115,6 @@ alias port="sudo lsof -PiTCP -sTCP:LISTEN"
 alias make="make -f ./Makefile -f ~/.make/Makefile.common"
 
 fpath=(/Users/sangilmo.fsl/.local/share/zsh-completion/completions $fpath) # avalanche completion
-rm -f ~/.zcompdump; compinit # avalanche completion
 
 # export NVM_DIR=~/.nvm
 # source $(brew --prefix nvm)/nvm.sh
@@ -130,16 +129,17 @@ export PATH=$PATH:$GOPATH/bin
 export PATH="$PATH:/Users/sangilmo.fsl/.local/bin"
 
 fpath=( ~/.zfunc "${fpath[@]}" )
-autoload -U compinit; compinit
-
-# fzf 기본 설정
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 export OPENSSL_LIB_DIR="$(brew --prefix openssl@3)/lib"
 export OPENSSL_INCLUDE_DIR="$(brew --prefix openssl@3)/include"
 export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig"
 export LIBRARY_PATH="$(brew --prefix openssl@3)/lib"
 
+export PATH="$HOME/.daml/bin:$PATH"
+
+# compinit (fpath 설정 완료 후 1회만 실행)
 autoload -Uz compinit
 compinit
-export PATH="$HOME/.daml/bin:$PATH"
+
+# fzf 설정 (compinit 이후에 source해야 Tab 바인딩 정상 작동)
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
