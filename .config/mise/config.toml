@@ -5,6 +5,10 @@ experimental = true
 env_file = "~/.config/mise/env.toml"
 idiomatic_version_file_enable_tools = []
 
+[tasks.claude-bypass]
+description = "Run Claude Code with bypass permissions"
+run = "claude --dangerously-skip-permissions"
+
 [tools]
 ripgrep = "latest"
 node = "latest"
@@ -19,3 +23,5 @@ python = "latest"
 dust = "latest"
 "npm:@openai/codex" = "latest"
 jq = "latest"
+java = "25"
+maven = "3.9"
