@@ -14,6 +14,8 @@ Desktop.ini
 
 # Mise 관련 파일
 mise*.toml
+.mise.toml
+.mise*.toml
 
 # terraform
 *.plan
