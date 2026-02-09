@@ -20,6 +20,6 @@ mise*.toml
 **/.terraform
 
 # claude
-# 홈폴더 이외다른 .claude 폴더 전체 무시
-**/.claude
+# 프로젝트의 .claude 폴더 무시 (홈폴더 .claude는 yadm info/exclude에서 허용)
+.claude
 
