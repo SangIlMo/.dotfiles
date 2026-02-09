@@ -9,6 +9,18 @@ idiomatic_version_file_enable_tools = []
 description = "Run Claude Code with bypass permissions"
 run = "claude --dangerously-skip-permissions"
 
+[tasks.claude-opus]
+description = "Run Claude Code with Opus model"
+run = "claude --model claude-opus-4-6"
+
+[tasks.claude-sonnet]
+description = "Run Claude Code with Sonnet model"
+run = "claude --model claude-sonnet-4-5-20250929"
+
+[tasks.claude-haiku]
+description = "Run Claude Code with Haiku model"
+run = "claude --model claude-haiku-4-5-20251001"
+
 [tools]
 ripgrep = "latest"
 node = "latest"
