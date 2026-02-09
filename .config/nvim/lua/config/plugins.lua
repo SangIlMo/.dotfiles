@@ -6,12 +6,28 @@ return {
 		config = true,
 	},
 
-	-- 테마
+	-- 테마 (tmux Catppuccin Mocha와 통일)
 	{
-		"folke/tokyonight.nvim",
+		"catppuccin/nvim",
+		name = "catppuccin",
 		priority = 1000,
 		config = function()
-			vim.cmd("colorscheme tokyonight")
+			require("catppuccin").setup({
+				flavour = "mocha",
+				transparent_background = false,
+				integrations = {
+					cmp = true,
+					gitsigns = true,
+					nvimtree = true,
+					treesitter = true,
+					telescope = { enabled = true },
+					mason = true,
+					native_lsp = {
+						enabled = true,
+					},
+				},
+			})
+			vim.cmd("colorscheme catppuccin")
 		end,
 	},
 

@@ -34,3 +34,28 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
 	pattern = "*",
 	command = "checktime",
 })
+
+-- tmux 페인 포커스 연동 (비활성 페인 dimming)
+if vim.env.TMUX then
+	local tmux_dim_bg = "#181825" -- tmux window-style bg (비활성 페인)
+	local saved_bg = nil
+
+	vim.api.nvim_create_autocmd("FocusLost", {
+		callback = function()
+			local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+			saved_bg = hl.bg
+			hl.bg = tmux_dim_bg
+			vim.api.nvim_set_hl(0, "Normal", hl)
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("FocusGained", {
+		callback = function()
+			if saved_bg ~= nil then
+				local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+				hl.bg = saved_bg
+				vim.api.nvim_set_hl(0, "Normal", hl)
+			end
+		end,
+	})
+end
