@@ -65,9 +65,22 @@ for each task in tasks:
         team_name: "review-team",
         name: f"{perspective}-reviewer",
         prompt: teammatePrompt(task),
+        model: selectModel(task),  // 작업 복잡도에 따라 모델 선택
         mode: "plan"  // 복잡한 작업 시 plan approval 요구
     )
 ```
+
+**Teammate 모델 선택 기준** (orchestration.md 모델 매트릭스와 동일):
+
+| Teammate 역할 | model | 이유 |
+|---------------|-------|------|
+| 코드 리뷰 (security-sentinel, performance-oracle, architecture-strategist) | sonnet | 분석 판단 필요 |
+| 프레임워크 연구 (framework-researcher) | sonnet | 조사 및 평가 |
+| 서비스 설계 (service-architect) | opus | 고수준 아키텍처 추론 |
+| 단순 수정 워커 (린트, 포맷팅) | haiku | 패턴 기반 단순 변경 |
+| 기능 구현 워커 | sonnet | 중간 복잡도 코딩 |
+| 테스트 생성 워커 | sonnet | 테스트 설계 필요 |
+| 대규모 단순 생성 워커 (보일러플레이트) | haiku | 반복적 패턴 생성 |
 
 **Teammate 책임**:
 - TaskGet으로 할당된 작업 읽기
@@ -239,6 +252,49 @@ SendMessage(
 - Teammate가 메시지를 보내면 **자동으로 수신자에게 전달** (폴링 불필요)
 - Teammate가 idle 상태가 되면 Leader에게 **자동 알림**
 - idle 알림에는 teammate 간 DM 요약이 포함됨
+
+---
+
+## 단일 Sub-agent 위임 패턴
+
+Agent Teams가 아닌 단일/순차 작업도 Leader context 보호를 위해 sub-agent로 위임합니다.
+
+### Pattern 0: Delegated Sequential (순차 위임)
+**사용 사례**: Sequential 모드 작업 (디버깅, 의존성 있는 수정 등)
+
+**워크플로우**:
+```
+User: "로그인 API 버그 수정해줘"
+
+Leader:
+  1. 작업 분석 → Sequential 모드 선택
+  2. Step 1: Task(subagent_type=Explore, model=haiku)
+     → 관련 코드 분석, 버그 원인 파악
+  3. Step 2: Task(subagent_type=general-purpose, model=sonnet)
+     → 버그 수정 (Step 1 결과를 prompt에 포함)
+  4. Step 3: Task(subagent_type=Bash, model=haiku)
+     → 테스트 실행
+  5. Leader: 결과 확인 → 사용자 보고 → git commit (직접 수행)
+```
+
+**핵심 원칙**:
+- Leader는 코드를 직접 읽거나 수정하지 않음
+- 이전 단계 결과를 다음 sub-agent prompt에 전달
+- git 작업(commit, push, branch)만 Leader가 직접 수행
+- 작업 복잡도에 따라 model 선택 (haiku/sonnet/opus)
+
+### Pattern 0-1: 단일 작업 위임 (Single Delegation)
+**사용 사례**: 단일 파일 수정, 코드 분석 등
+
+**워크플로우**:
+```
+User: "이 함수에 null 체크 추가해줘"
+
+Leader:
+  1. Task(subagent_type=general-purpose, model=haiku)
+     → null 체크 추가
+  2. Leader: 결과 확인 → 사용자 보고
+```
 
 ---
 
@@ -664,10 +720,10 @@ Claude:
 User: "네, 수정해줘"
 
 Claude:
-  [Sequential 모드로 전환]
-  [SQL Injection 수정...]
-  [N+1 Query 수정...]
-  [테스트 실행]
+  [Delegated Sequential로 전환]
+  [Task(model=sonnet) → SQL Injection 수정]
+  [Task(model=sonnet) → N+1 Query 수정]
+  [Task(model=haiku) → 테스트 실행]
 
   ✅ Critical 이슈 수정 완료
 
@@ -764,6 +820,6 @@ Teammate:
 
 ---
 
-**Last Updated**: 2026-02-07
-**Version**: 3.0.0
+**Last Updated**: 2026-02-09
+**Version**: 3.1.0
 **Status**: Production Ready
