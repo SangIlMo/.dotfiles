@@ -111,9 +111,6 @@ alias m="mise run"
 
 alias port="sudo lsof -PiTCP -sTCP:LISTEN"
 
-# 전역 alias 등록 (권장되진 않음)
-alias make="make -f ./Makefile -f ~/.make/Makefile.common"
-
 fpath=(/Users/sangilmo.fsl/.local/share/zsh-completion/completions $fpath) # avalanche completion
 
 # export NVM_DIR=~/.nvm
