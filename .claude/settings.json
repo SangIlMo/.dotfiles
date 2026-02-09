@@ -37,6 +37,16 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat ~/.claude/rules/*.md"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
@@ -46,8 +56,8 @@
   "enabledPlugins": {
     "ast-grep@ast-grep-marketplace": true,
     "openzeppelin-erc@fairsquarelab-plugins": true,
-    "feature-dev@claude-plugins-official": true
+    "feature-dev@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true
   },
-  "teammateMode": "tmux",
-  "effortLevel": "low"
+  "teammateMode": "tmux"
 }
