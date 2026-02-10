@@ -36,3 +36,36 @@ quick-terminal-position = top
 
 # Keybinds
 keybind = super+shift+enter=new_window
+
+# Bold 텍스트에 Bright 색상 사용 (iTerm2와 동일)
+bold-is-bright = true
+
+# iTerm2 Colors
+foreground = #ffffff
+background = #000000
+cursor-color = #ffffff
+cursor-text = #000000
+selection-background = #b4d5ff
+selection-foreground = #000000
+
+# Normal colors (0-7) - Contrast 60% 적용
+palette = 0=#000000
+palette = 1=#ff6b6b
+palette = 2=#4e9a05
+palette = 3=#c4a000
+palette = 4=#7aabeb
+palette = 5=#74507a
+palette = 6=#05989a
+palette = 7=#d3d7cf
+
+# Bright colors (8-15) - Contrast 60% 적용
+palette = 8=#9a9e97
+palette = 9=#ff7878
+palette = 10=#8ae134
+palette = 11=#fce94e
+palette = 12=#a8c8eb
+palette = 13=#cbafc6
+palette = 14=#34e2e2
+palette = 15=#ededec
+
+background-opacity = 0.75

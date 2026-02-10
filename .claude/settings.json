@@ -59,5 +59,6 @@
     "feature-dev@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true
   },
-  "teammateMode": "tmux"
+  "teammateMode": "tmux",
+  "effortLevel": "low"
 }

@@ -35,27 +35,22 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
 	command = "checktime",
 })
 
--- tmux 페인 포커스 연동 (비활성 페인 dimming)
+-- tmux 페인 포커스 연동 (transparent background에서 포커스 상태 유지)
 if vim.env.TMUX then
-	local tmux_dim_bg = "#181825" -- tmux window-style bg (비활성 페인)
 	local saved_bg = nil
 
 	vim.api.nvim_create_autocmd("FocusLost", {
 		callback = function()
+			-- FocusLost에서 배경색을 변경하지 않음 (Ghostty 투명 배경 유지)
 			local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
 			saved_bg = hl.bg
-			hl.bg = tmux_dim_bg
-			vim.api.nvim_set_hl(0, "Normal", hl)
 		end,
 	})
 
 	vim.api.nvim_create_autocmd("FocusGained", {
 		callback = function()
-			if saved_bg ~= nil then
-				local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
-				hl.bg = saved_bg
-				vim.api.nvim_set_hl(0, "Normal", hl)
-			end
+			-- FocusGained에서도 배경색 복원하지 않음 (일관된 투명 배경 유지)
+			-- 이전 배경색이 필요하면 복원 가능하지만 transparent_background = true에서는 불필요
 		end,
 	})
 end
