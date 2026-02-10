@@ -4,9 +4,9 @@
 
 # Check if Claude Code is running
 if pgrep -f "claude" &>/dev/null; then
-    claude_status="#[fg=#a6e3a1]Claude:active"  # green
+    claude_status="#[fg=#50fa7b]Claude:active"  # Dracula green
 else
-    claude_status="#[fg=#6c7086]Claude:idle"     # overlay0 (gray)
+    claude_status="#[fg=#6272a4]Claude:idle"     # Dracula gray
 fi
 
 # Check Agent Teams status
@@ -39,7 +39,7 @@ if [ -d "$teams_dir" ]; then
             done
 
             if [ "$total_tasks" -gt 0 ]; then
-                team_str=" #[fg=#cba6f7]Team:${team_name} ${completed_tasks}/${total_tasks}"  # mauve
+                team_str=" #[fg=#bd93f9]Team:${team_name} ${completed_tasks}/${total_tasks}"  # Dracula purple
             fi
         fi
 

@@ -1,12 +1,15 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   },
   "permissions": {
     "allow": [
       "Bash"
     ]
   },
+  "model": "opus",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -55,7 +58,6 @@
   },
   "enabledPlugins": {
     "ast-grep@ast-grep-marketplace": true,
-    "openzeppelin-erc@fairsquarelab-plugins": true,
     "feature-dev@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true
   },

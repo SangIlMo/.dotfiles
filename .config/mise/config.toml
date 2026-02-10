@@ -2,7 +2,6 @@
 
 [settings]
 experimental = true
-env_file = "~/.config/mise/env.toml"
 idiomatic_version_file_enable_tools = []
 
 [tasks.claude-bypass]
@@ -20,6 +19,31 @@ run = "claude --model claude-sonnet-4-5-20250929"
 [tasks.claude-haiku]
 description = "Run Claude Code with Haiku model"
 run = "claude --model claude-haiku-4-5-20251001"
+
+[tasks.claude-planner]
+description = "Run Claude as planner (subscription, no API key)"
+run = "claude"
+
+[tasks.claude-executor]
+description = "Run Claude as executor (z.ai API key)"
+run = "source ~/.config/mise/tasks/zai/claude"
+
+[tasks.claude-dual]
+description = "Run planner + executor in tmux split"
+run = "NAME=\"dual-$(date +%H%M%S)\" && tmux new-window -n \"$NAME\" 'claude' && tmux split-window -h -t \"$NAME\" 'source ~/.config/mise/tasks/zai/claude'"
+
+[tasks.specs-status]
+description = "Show EARS specs status for current project"
+run = """
+PROJECT=$(basename "$PWD")
+SPECS_DIR="$HOME/.claude/specs/$PROJECT"
+echo "=== Specs Status: $PROJECT ==="
+for status in pending doing done; do
+  count=$(ls "$SPECS_DIR/$status" 2>/dev/null | wc -l | tr -d ' ')
+  echo "$status: $count"
+  ls "$SPECS_DIR/$status" 2>/dev/null | sed 's/^/  /'
+done
+"""
 
 [tools]
 ripgrep = "latest"
