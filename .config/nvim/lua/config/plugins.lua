@@ -6,28 +6,13 @@ return {
 		config = true,
 	},
 
-	-- 테마 (tmux Catppuccin Mocha와 통일)
+	-- 테마 (Dracula)
 	{
-		"catppuccin/nvim",
-		name = "catppuccin",
+		"Mofiqul/dracula.nvim",
 		priority = 1000,
 		config = function()
-			require("catppuccin").setup({
-				flavour = "mocha",
-				transparent_background = true,
-				integrations = {
-					cmp = true,
-					gitsigns = true,
-					nvimtree = true,
-					treesitter = true,
-					telescope = { enabled = true },
-					mason = true,
-					native_lsp = {
-						enabled = true,
-					},
-				},
-			})
-			vim.cmd("colorscheme catppuccin")
+			require("dracula").setup({ transparent_bg = true })
+			vim.cmd("colorscheme dracula")
 		end,
 	},
 
