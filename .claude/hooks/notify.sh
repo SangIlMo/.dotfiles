@@ -1,6 +1,6 @@
 #!/bin/bash
 # Claude Code 알림 스크립트
-# 입력: JSON (event, cwd)
+# 입력: JSON via stdin OR event type as $1 argument
 # 출력: 데스크톱 알림 + 사운드
 
 set -eo pipefail
@@ -9,27 +9,38 @@ set -eo pipefail
 DEBUG_LOG="$HOME/.claude/hooks/notify.log"
 mkdir -p "$(dirname "$DEBUG_LOG")"
 
-# 1. JSON 입력 읽기
-INPUT=$(cat)
-
-# 디버그: 입력 로깅
-echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$DEBUG_LOG"
-echo "INPUT: $INPUT" >> "$DEBUG_LOG"
-
-# 2. 이벤트 타입과 작업 디렉토리 파싱 (jq 사용)
-if command -v jq &> /dev/null; then
-  EVENT=$(echo "$INPUT" | jq -r '.event // .hook_event_name // "unknown"')
-  CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
-  # Claude Code의 message 필드 추출
-  CLAUDE_MESSAGE=$(echo "$INPUT" | jq -r '.message // ""')
-  NOTIFICATION_TYPE=$(echo "$INPUT" | jq -r '.notification_type // ""')
+# 1. 이벤트 타입 결정 (인자가 있으면 사용, 아니면 JSON에서 파싱)
+if [ -n "$1" ]; then
+  EVENT="$1"
+  CWD="$PWD"
+  INPUT='{"event":"'"$EVENT"'","cwd":"'"$CWD"'"}'
 else
-  # jq 없으면 기본값
-  EVENT="notification"
-  CWD=""
-  CLAUDE_MESSAGE=""
-  NOTIFICATION_TYPE=""
+  # 1. JSON 입력 읽기
+  INPUT=$(cat)
+
+  # 디버그: 입력 로깅
+  echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$DEBUG_LOG"
+  echo "INPUT: $INPUT" >> "$DEBUG_LOG"
+
+  # 2. 이벤트 타입과 작업 디렉토리 파싱 (jq 사용)
+  if command -v jq &> /dev/null; then
+    EVENT=$(echo "$INPUT" | jq -r '.event // .hook_event_name // "unknown"')
+    CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
+    # Claude Code의 message 필드 추출
+    CLAUDE_MESSAGE=$(echo "$INPUT" | jq -r '.message // ""')
+    NOTIFICATION_TYPE=$(echo "$INPUT" | jq -r '.notification_type // ""')
+  else
+    # jq 없으면 기본값
+    EVENT="notification"
+    CWD=""
+    CLAUDE_MESSAGE=""
+    NOTIFICATION_TYPE=""
+  fi
 fi
+
+# 인자 모드일 경우 변수 초기화
+CLAUDE_MESSAGE="${CLAUDE_MESSAGE:-}"
+NOTIFICATION_TYPE="${NOTIFICATION_TYPE:-}"
 
 # 3. Git 컨텍스트 감지
 CONTEXT=""

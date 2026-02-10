@@ -22,15 +22,20 @@ run = "claude --model claude-haiku-4-5-20251001"
 
 [tasks.claude-planner]
 description = "Run Claude as planner (subscription, no API key)"
-run = "claude"
+dir = "{{cwd}}"
+run = "claude --dangerously-skip-permissions"
 
 [tasks.claude-executor]
 description = "Run Claude as executor (z.ai API key)"
-run = "source ~/.config/mise/tasks/zai/claude"
+dir = "{{cwd}}"
+run = "~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
 
 [tasks.claude-dual]
 description = "Run planner + executor in tmux split"
-run = "NAME=\"dual-$(date +%H%M%S)\" && tmux new-window -n \"$NAME\" 'claude' && tmux split-window -h -t \"$NAME\" 'source ~/.config/mise/tasks/zai/claude'"
+dir = "{{cwd}}"
+run = """
+LEADER_NAME="leader-$(date +%H%M%S)" && tmux rename-window "$LEADER_NAME" && NAME="dual-$(date +%H%M%S)" && tmux new-window -n "$NAME" -c "$PWD" 'claude --dangerously-skip-permissions' && tmux split-window -h -t "$NAME" -c "$PWD" '~/.config/mise/tasks/zai/claude --dangerously-skip-permissions'
+"""
 
 [tasks.specs-status]
 description = "Show EARS specs status for current project"
