@@ -48,6 +48,25 @@ EARS 스펙을 생성합니다.
 (추가 컨텍스트)
 ```
 
+## Executor 자동 전달
+
+스펙 저장 완료 후, 같은 윈도우의 executor pane에 자동 전달합니다:
+
+```bash
+# 현재 윈도우의 pane 목록 조회
+MY_PANE=$(tmux display-message -p '#{pane_id}')
+EXECUTOR_PANE=$(tmux list-panes -F '#{pane_id}' | grep -v "$MY_PANE" | head -1)
+
+# executor에게 exec-ears 명령 전송
+if [ -n "$EXECUTOR_PANE" ]; then
+  tmux send-keys -t "$EXECUTOR_PANE" -l '/exec-ears {spec-filename}' && tmux send-keys -t "$EXECUTOR_PANE" Enter
+fi
+```
+
+- 자신의 pane ID를 제외한 나머지 pane이 executor입니다
+- 전달 후 사용자에게 "스펙을 executor에 전달했습니다" 메시지를 출력합니다
+- 전달 실패 시에도 스펙은 `pending/`에 저장되어 있으므로 수동 실행 가능합니다
+
 ## 주의사항
 - 코드를 직접 작성하지 않고 스펙만 작성합니다
 - 코드베이스를 충분히 탐색하여 정확한 Scope를 기술합니다
