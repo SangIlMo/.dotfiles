@@ -28,21 +28,36 @@ Leader ──send-keys──→ Planner (plan-ears)
 
 ## Instructions
 
-### 1. 듀얼 세션 확인/실행
-`--new` 플래그가 있거나 dual 윈도우가 없으면 새로 생성합니다:
+### 1. Leader ID 결정
+현재 윈도우 이름에서 Leader ID를 추출하거나 새로 할당합니다:
 ```bash
-# 기존 dual 확인
-tmux list-windows -F '#{window_name}' | grep '^dual'
+CURRENT_WIN=$(tmux display-message -p '#{window_name}')
 
-# 새로 생성 (--new이거나 없을 때)
-mise run claude-dual
+# 이미 leaderN이면 그 번호 사용, 아니면 최대값+1
+if echo "$CURRENT_WIN" | grep -qE '^leader[0-9]+$'; then
+  LID=$(echo "$CURRENT_WIN" | sed 's/^leader//')
+else
+  MAX_ID=$(tmux list-windows -F '#{window_name}' | sed -n 's/^leader\([0-9]\{1,\}\)$/\1/p' | sort -n | tail -1)
+  LID=$(( ${MAX_ID:-0} + 1 ))
+fi
 ```
-기존 dual이 있고 `--new`가 아니면 가장 최근 dual 윈도우를 재사용합니다.
 
-### 2. Planner에게 명령 전달
+### 2. 듀얼 세션 확인/실행
+`--new` 플래그가 있거나 매칭되는 dual 윈도우가 없으면 새로 생성합니다:
+```bash
+# 이 Leader의 dual 윈도우 목록 확인 (dual{N}-1, dual{N}-2, ...)
+tmux list-windows -F '#{window_name}' | grep "^dual${LID}-"
+
+# 새로 생성 (--new이거나 없을 때) — 자동으로 dual{N}-{M} 번호 증가
+LEADER_ID=$LID mise run claude-dual
+```
+`--new`가 아니면 가장 최근 `dual{LID}-*` 윈도우를 재사용합니다.
+
+### 3. Planner에게 명령 전달
 dual 윈도우의 좌측 pane(planner)에 plan-ears 명령을 전송합니다:
 ```bash
-DUAL_WIN=$(tmux list-windows -F '#{window_name}' | grep '^dual' | tail -1)
+DUAL_WIN=$(tmux list-windows -F '#{window_name}' | grep "^dual${LID}-" | tail -1)
+if [ -z "$DUAL_WIN" ]; then echo "dual 윈도우를 찾을 수 없습니다"; exit 1; fi
 PLANNER_PANE=$(tmux list-panes -t "$DUAL_WIN" -F '#{pane_id}' | head -1)
 tmux send-keys -t "$PLANNER_PANE" -l '/plan-ears "{기능 설명}"' && tmux send-keys -t "$PLANNER_PANE" Enter
 ```

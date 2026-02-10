@@ -37,8 +37,7 @@ pending 스펙을 실행합니다.
    ```
 8. **Leader에게 완료 알림 전송**:
    ```bash
-   # 현재 세션의 모든 pane에서 leader(leader-* 윈도우) 찾기
-   LEADER_PANE=$(tmux list-panes -s -F '#{window_name}:#{pane_id}' | grep '^leader' | head -1 | cut -d: -f2)
+   LEADER_PANE=$(~/.claude/lib/find-leader.sh)
    if [ -n "$LEADER_PANE" ]; then
      tmux send-keys -t "$LEADER_PANE" -l "EARS 스펙 완료: {spec-id}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." && tmux send-keys -t "$LEADER_PANE" Enter
    fi

@@ -52,4 +52,8 @@
 1. 현재 윈도우의 pane 목록 조회: `tmux list-panes -F '#{pane_index}:#{pane_id}'`
 2. 자신이 아닌 다른 pane(executor)의 ID 확인
 3. 해당 pane에 exec-ears 명령 전송
-4. 사용자에게 "스펙을 executor에 전달했습니다" 메시지 출력
+4. 사용자에게 "스펙을 executor에 전달했습니다 (leader${CLAUDE_LEADER_ID})" 메시지 출력
+
+## Leader 식별
+- `CLAUDE_LEADER_ID` 환경변수로 자신을 생성한 Leader의 ID를 알 수 있습니다
+- 윈도우명이 `dualN-M` 형식이며, N이 Leader ID, M이 dual 순번입니다

@@ -31,11 +31,10 @@
 ## Leader 알림 방법
 구현 완료 후 반드시 실행:
 ```bash
-# leader로 시작하는 윈도우에서 leader pane 찾기
-LEADER_PANE=$(tmux list-panes -s -F '#{window_name}:#{pane_id}' | grep '^leader' | head -1 | cut -d: -f2)
+LEADER_PANE=$(~/.claude/lib/find-leader.sh)
 if [ -n "$LEADER_PANE" ]; then
   tmux send-keys -t "$LEADER_PANE" -l "EARS 스펙 완료: {SPEC-ID}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." && tmux send-keys -t "$LEADER_PANE" Enter
 fi
 ```
-- `leader`로 시작하는 윈도우의 첫 번째 pane이 leader입니다
+- `~/.claude/lib/find-leader.sh`가 CLAUDE_LEADER_ID 또는 윈도우명에서 Leader를 자동 식별합니다
 - 알림 전송 후 사용자에게 "leader에 완료를 알렸습니다" 메시지 출력

@@ -31,10 +31,19 @@ dir = "{{cwd}}"
 run = "~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
 
 [tasks.claude-dual]
-description = "Run planner + executor in tmux split"
+description = "Run planner + executor in tmux split (LEADER_ID=N)"
 dir = "{{cwd}}"
 run = """
-LEADER_NAME="leader-$(date +%H%M%S)" && tmux rename-window "$LEADER_NAME" && NAME="dual-$(date +%H%M%S)" && tmux new-window -n "$NAME" -c "$PWD" 'claude --dangerously-skip-permissions' && tmux split-window -h -t "$NAME" -c "$PWD" '~/.config/mise/tasks/zai/claude --dangerously-skip-permissions'
+LID="${LEADER_ID:-1}"
+# 숫자 검증
+if ! echo "$LID" | grep -qE '^[0-9]+$'; then echo "LEADER_ID must be numeric"; exit 1; fi
+tmux rename-window "leader${LID}"
+# dual{N}-{M} 형태: 기존 dual{N}-* 중 최대 M+1
+MAX_M=$(tmux list-windows -F '#{window_name}' | sed -n "s/^dual${LID}-\\([0-9]\\{1,\\}\\)$/\\1/p" | sort -n | tail -1)
+DM=$(( ${MAX_M:-0} + 1 ))
+DNAME="dual${LID}-${DM}"
+tmux new-window -n "$DNAME" -c "$PWD" "CLAUDE_LEADER_ID=${LID} claude --dangerously-skip-permissions"
+tmux split-window -h -t "$DNAME" -c "$PWD" "CLAUDE_LEADER_ID=${LID} ~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
 """
 
 [tasks.specs-status]
