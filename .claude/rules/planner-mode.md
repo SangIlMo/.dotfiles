@@ -44,7 +44,7 @@
    ```bash
    tmux send-keys -t {executor-pane-id} -l '/exec-ears {spec-filename}' && tmux send-keys -t {executor-pane-id} Enter
    ```
-   - executor pane은 현재 윈도우의 pane index 1 (우측)
+   - executor pane은 현재 윈도우의 pane index 0 (2-pane: E(0) | T(1))
    - `tmux list-panes -F '#{pane_index}:#{pane_id}'`로 pane ID 확인
 
 ## Executor 전달 방법

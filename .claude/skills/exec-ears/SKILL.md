@@ -35,16 +35,16 @@ pending 스펙을 실행합니다.
    ```bash
    mv ~/.claude/specs/$PROJECT/doing/{spec} ~/.claude/specs/$PROJECT/done/
    ```
-8. **Leader에게 완료 알림 전송**:
+8. **Tester에게 테스트 요청 전송**:
    ```bash
-   LEADER_PANE=$(~/.claude/lib/find-leader.sh)
-   if [ -n "$LEADER_PANE" ]; then
-     tmux send-keys -t "$LEADER_PANE" -l "EARS 스펙 완료: {spec-id}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." && tmux send-keys -t "$LEADER_PANE" Enter
+   TESTER_PANE=$(tmux list-panes -F '#{pane_index}:#{pane_id}' | grep '^1:' | cut -d: -f2)
+   if [ -n "$TESTER_PANE" ]; then
+     tmux send-keys -t "$TESTER_PANE" -l "테스트 요청: {spec-id}. 구현 완료된 스펙을 테스트해주세요." && tmux send-keys -t "$TESTER_PANE" Enter
    fi
    ```
 
 ## 주의사항
 - 스펙의 Scope에 명시된 파일만 수정합니다
 - Acceptance Criteria를 모두 충족하는지 확인합니다
-- 테스트가 있으면 실행하여 검증합니다
-- 완료 후 반드시 Leader에게 알림을 보냅니다
+- 완료 후 반드시 Tester(pane index 2)에게 테스트를 요청합니다
+- Tester가 수정 요청을 보내면 수정 후 다시 테스트 요청합니다
