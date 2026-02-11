@@ -1,0 +1,270 @@
+{
+  "name": "Telegram Claude Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "telegram-claude-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "vAi5YPUJJ7cxzFVJ",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Access Telegram data from trigger\nconst telegramData = $input.first().json;\nconst message = telegramData.message;\nconst chatId = message.chat.id;\nconst messageId = message.message_id;\nconst text = message.text || '';\n\n// Whitelist check\nconst WHITELIST = ['6016705076']; // Replace with your actual chat ID\nif (!WHITELIST.includes(chatId.toString())) {\n  return [{\n    json: {\n      chatId,\n      messageId,\n      skipExecution: true,\n      error: 'Unauthorized user'\n    }\n  }];\n}\n\n// Parse command\nlet command = '';\nlet commandType = 'ask';\nlet skipExecution = false;\n\nif (text.startsWith('/ask ')) {\n  const question = text.substring(5).trim();\n  if (!question) {\n    skipExecution = true;\n  } else {\n    commandType = 'ask';\n    command = `claude -p \"${question.replace(/\"/g, '\\\\\"')}\" --output-format text`;\n  }\n} else if (text.startsWith('/run ')) {\n  const task = text.substring(5).trim();\n  if (!task) {\n    skipExecution = true;\n  } else {\n    commandType = 'run';\n    command = `claude -p \"${task.replace(/\"/g, '\\\\\"')}\" --output-format text --allowedTools \"Read,Grep,Glob,Bash(git *)\"`;\n  }\n} else if (text.startsWith('/status')) {\n  commandType = 'status';\n  command = 'uptime && sysctl -n vm.loadavg';\n} else if (text.startsWith('/')) {\n  // Unknown command\n  skipExecution = true;\n} else {\n  // Default to ask\n  const question = text.trim();\n  if (!question) {\n    skipExecution = true;\n  } else {\n    commandType = 'ask';\n    command = `claude -p \"${question.replace(/\"/g, '\\\\\"')}\" --output-format text`;\n  }\n}\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    command,\n    commandType,\n    skipExecution\n  }\n}];"
+      },
+      "id": "parse-command",
+      "name": "Parse Command & Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skipExecution }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-skip",
+      "name": "Check Skip",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3456/execute",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "claude-local-key"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "={{ $json.command }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "execute-command",
+      "name": "Execute Command",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get parse data and HTTP response\nconst parseData = $('Parse Command & Filter').first().json;\nconst httpResponse = $input.first().json;\n\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\nconst commandType = parseData.commandType;\n\n// Extract output from HTTP response\nlet output = '';\n\nif (httpResponse.error) {\n  // HTTP request failed entirely\n  output = `❌ Server error: ${httpResponse.error}`;\n} else if (httpResponse.exitCode !== 0) {\n  // Command executed but failed\n  output = `❌ Command failed (exit ${httpResponse.exitCode}):\\n${httpResponse.stderr || httpResponse.stdout}`;\n} else {\n  // Success\n  output = httpResponse.stdout || '(no output)';\n}\n\n// Add prefix based on command type\nif (commandType === 'ask') {\n  output = `🤖 Claude:\\n${output}`;\n} else if (commandType === 'run') {\n  output = `⚙️ Execution:\\n${output}`;\n} else if (commandType === 'status') {\n  output = `📊 Status:\\n${output}`;\n}\n\n// Truncate to 4000 chars (Telegram limit is 4096)\nif (output.length > 4000) {\n  output = output.substring(0, 3980) + '\\n\\n... (truncated)';\n}\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    output\n  }\n}];"
+      },
+      "id": "format-output",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.messageId }}"
+        }
+      },
+      "id": "send-telegram-message",
+      "name": "Send Telegram Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vAi5YPUJJ7cxzFVJ",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get parse data\nconst parseData = $input.first().json;\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\nconst error = parseData.error || 'Invalid command or empty message';\n\nconst output = `❌ Error: ${error}\\n\\nUsage:\\n/ask <question> - Ask Claude\\n/run <task> - Execute task\\n/status - System status`;\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    output\n  }\n}];"
+      },
+      "id": "format-error",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.messageId }}"
+        }
+      },
+      "id": "send-error-message",
+      "name": "Send Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vAi5YPUJJ7cxzFVJ",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Command & Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Command & Filter": {
+      "main": [
+        [
+          {
+            "node": "Check Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Skip": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Output": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-02-10T00:00:00.000Z",
+  "versionId": "1"
+}

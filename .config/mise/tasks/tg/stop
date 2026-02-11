@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Stop Telegram-Claude services"
+~/.config/claude-telegram/start.sh stop

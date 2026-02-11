@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Show Telegram-Claude service logs"
+~/.config/claude-telegram/start.sh logs "${1:-all}"

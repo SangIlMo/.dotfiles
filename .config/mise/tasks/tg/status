@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Show Telegram-Claude services status"
+~/.config/claude-telegram/start.sh status

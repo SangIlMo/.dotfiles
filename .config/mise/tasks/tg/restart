@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Restart Telegram-Claude services"
+~/.config/claude-telegram/start.sh restart

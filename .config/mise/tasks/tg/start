@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Start Telegram-Claude services (tunnel + api + n8n)"
+~/.config/claude-telegram/start.sh start
