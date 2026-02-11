@@ -31,7 +31,7 @@ dir = "{{cwd}}"
 run = "~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
 
 [tasks.claude-dual]
-description = "Run executor + tester in tmux split (LEADER_ID=N)"
+description = "Run executor in tmux window (LEADER_ID=N). Tester is spawned on-demand by executor."
 dir = "{{cwd}}"
 run = """
 LID="${LEADER_ID:-1}"
@@ -43,7 +43,6 @@ MAX_M=$(tmux list-windows -F '#{window_name}' | sed -n "s/^dual${LID}-\\([0-9]\\
 DM=$(( ${MAX_M:-0} + 1 ))
 DNAME="dual${LID}-${DM}"
 tmux new-window -n "$DNAME" -c "$PWD" "CLAUDE_LEADER_ID=${LID} ~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
-tmux split-window -h -t "$DNAME" -c "$PWD" "CLAUDE_LEADER_ID=${LID} CLAUDE_ROLE=tester ~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
 """
 
 [tasks.specs-status]

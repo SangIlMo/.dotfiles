@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Access Telegram data from trigger\nconst telegramData = $input.first().json;\nconst message = telegramData.message;\nconst chatId = message.chat.id;\nconst messageId = message.message_id;\nconst text = message.text || '';\n\n// Whitelist check\nconst WHITELIST = ['6016705076']; // Replace with your actual chat ID\nif (!WHITELIST.includes(chatId.toString())) {\n  return [{\n    json: {\n      chatId,\n      messageId,\n      skipExecution: true,\n      error: 'Unauthorized user'\n    }\n  }];\n}\n\n// Parse command\nlet command = '';\nlet commandType = 'ask';\nlet skipExecution = false;\n\nif (text.startsWith('/ask ')) {\n  const question = text.substring(5).trim();\n  if (!question) {\n    skipExecution = true;\n  } else {\n    commandType = 'ask';\n    command = `claude -p \"${question.replace(/\"/g, '\\\\\"')}\" --output-format text`;\n  }\n} else if (text.startsWith('/run ')) {\n  const task = text.substring(5).trim();\n  if (!task) {\n    skipExecution = true;\n  } else {\n    commandType = 'run';\n    command = `claude -p \"${task.replace(/\"/g, '\\\\\"')}\" --output-format text --allowedTools \"Read,Grep,Glob,Bash(git *)\"`;\n  }\n} else if (text.startsWith('/status')) {\n  commandType = 'status';\n  command = 'uptime && sysctl -n vm.loadavg';\n} else if (text.startsWith('/')) {\n  // Unknown command\n  skipExecution = true;\n} else {\n  // Default to ask\n  const question = text.trim();\n  if (!question) {\n    skipExecution = true;\n  } else {\n    commandType = 'ask';\n    command = `claude -p \"${question.replace(/\"/g, '\\\\\"')}\" --output-format text`;\n  }\n}\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    command,\n    commandType,\n    skipExecution\n  }\n}];"
+        "jsCode": "// Access Telegram data from trigger\nconst telegramData = $input.first().json;\nconst message = telegramData.message;\nconst chatId = message.chat.id;\nconst messageId = message.message_id;\nconst text = message.text || '';\n\n// Whitelist check\nconst WHITELIST = ['6016705076'];\nif (!WHITELIST.includes(chatId.toString())) {\n  return [{\n    json: {\n      chatId,\n      messageId,\n      skipExecution: true,\n      isNewSession: false,\n      error: 'Unauthorized user'\n    }\n  }];\n}\n\n// Parse command\nlet command = '';\nlet commandType = 'ask';\nlet skipExecution = false;\nlet isNewSession = false;\n\nif (text.startsWith('/new')) {\n  // New session command\n  commandType = 'new';\n  isNewSession = true;\n  skipExecution = false;\n} else if (text.startsWith('/run ')) {\n  const task = text.substring(5).trim();\n  if (!task) {\n    skipExecution = true;\n  } else {\n    commandType = 'run';\n    command = `claude -p \"${task.replace(/\"/g, '\\\\\"')}\" --output-format text --allowedTools \"Read,Grep,Glob,Bash(git *)\"`;\n  }\n} else if (text.startsWith('/status')) {\n  commandType = 'status';\n  command = 'uptime && sysctl -n vm.loadavg';\n} else if (text.startsWith('/')) {\n  // Unknown command\n  skipExecution = true;\n} else {\n  // Default to ask (plain text message)\n  const question = text.trim();\n  if (!question) {\n    skipExecution = true;\n  } else {\n    commandType = 'ask';\n    command = `claude -p \"${question.replace(/\"/g, '\\\\\"')}\" --output-format text`;\n  }\n}\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    command,\n    commandType,\n    skipExecution,\n    isNewSession\n  }\n}];"
       },
       "id": "parse-command",
       "name": "Parse Command & Filter",
@@ -70,6 +70,106 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "new-session-check",
+              "leftValue": "={{ $json.isNewSession }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-new-session",
+      "name": "Check New Session",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3456/session/new",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "claude-local-key"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "new-session-request",
+      "name": "New Session Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get parse data and HTTP response\nconst parseData = $('Parse Command & Filter').first().json;\nconst httpResponse = $input.first().json;\n\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\n\n// Extract session ID from HTTP response\nlet output = '';\n\nif (httpResponse.error) {\n  output = `❌ Server error: ${httpResponse.error}`;\n} else if (httpResponse.sessionId) {\n  const sessionIdShort = httpResponse.sessionId.substring(0, 8);\n  output = `🆕 새 세션이 시작되었습니다\\n\\nSession: ${sessionIdShort}`;\n} else {\n  output = `❌ Failed to create new session`;\n}\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    output\n  }\n}];"
+      },
+      "id": "format-new-session",
+      "name": "Format New Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.messageId }}"
+        }
+      },
+      "id": "send-new-session-message",
+      "name": "Send New Session Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vAi5YPUJJ7cxzFVJ",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "http://127.0.0.1:3456/execute",
         "authentication": "none",
@@ -83,14 +183,8 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "command",
-              "value": "={{ $json.command }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ command: $json.command, chatId: $json.chatId, messageId: $json.messageId, commandType: $json.commandType }) }}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -106,21 +200,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        900,
-        200
+        1120,
+        100
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Get parse data and HTTP response\nconst parseData = $('Parse Command & Filter').first().json;\nconst httpResponse = $input.first().json;\n\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\nconst commandType = parseData.commandType;\n\n// Extract output from HTTP response\nlet output = '';\n\nif (httpResponse.error) {\n  // HTTP request failed entirely\n  output = `❌ Server error: ${httpResponse.error}`;\n} else if (httpResponse.exitCode !== 0) {\n  // Command executed but failed\n  output = `❌ Command failed (exit ${httpResponse.exitCode}):\\n${httpResponse.stderr || httpResponse.stdout}`;\n} else {\n  // Success\n  output = httpResponse.stdout || '(no output)';\n}\n\n// Add prefix based on command type\nif (commandType === 'ask') {\n  output = `🤖 Claude:\\n${output}`;\n} else if (commandType === 'run') {\n  output = `⚙️ Execution:\\n${output}`;\n} else if (commandType === 'status') {\n  output = `📊 Status:\\n${output}`;\n}\n\n// Truncate to 4000 chars (Telegram limit is 4096)\nif (output.length > 4000) {\n  output = output.substring(0, 3980) + '\\n\\n... (truncated)';\n}\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    output\n  }\n}];"
+        "jsCode": "const parseData = $('Parse Command & Filter').first().json;\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\nconst commandType = parseData.commandType;\n\nconst labels = { ask: '🤖 처리 중...', run: '🚀 실행 중...', status: '📊 확인 중...' };\nconst output = labels[commandType] || '⏳ 처리 중...';\n\nreturn [{ json: { chatId, messageId, output } }];"
       },
       "id": "format-output",
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
-        200
+        1340,
+        100
       ]
     },
     {
@@ -136,8 +230,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1340,
-        200
+        1560,
+        100
       ],
       "credentials": {
         "telegramApi": {
@@ -148,7 +242,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get parse data\nconst parseData = $input.first().json;\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\nconst error = parseData.error || 'Invalid command or empty message';\n\nconst output = `❌ Error: ${error}\\n\\nUsage:\\n/ask <question> - Ask Claude\\n/run <task> - Execute task\\n/status - System status`;\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    output\n  }\n}];"
+        "jsCode": "// Get parse data\nconst parseData = $input.first().json;\nconst chatId = parseData.chatId;\nconst messageId = parseData.messageId;\nconst error = parseData.error || 'Invalid command or empty message';\n\nconst output = `❌ Error: ${error}\\n\\nUsage:\\n<text> - Ask Claude (default)\\n/run <task> - Execute task\\n/new - New session\\n/status - System status`;\n\nreturn [{\n  json: {\n    chatId,\n    messageId,\n    output\n  }\n}];"
       },
       "id": "format-error",
       "name": "Format Error",
@@ -156,7 +250,7 @@
       "typeVersion": 2,
       "position": [
         1120,
-        400
+        500
       ]
     },
     {
@@ -173,7 +267,7 @@
       "typeVersion": 1.2,
       "position": [
         1340,
-        400
+        500
       ],
       "credentials": {
         "telegramApi": {
@@ -217,7 +311,47 @@
         ],
         [
           {
+            "node": "Check New Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check New Session": {
+      "main": [
+        [
+          {
+            "node": "New Session Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Session Request": {
+      "main": [
+        [
+          {
+            "node": "Format New Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format New Session": {
+      "main": [
+        [
+          {
+            "node": "Send New Session Message",
             "type": "main",
             "index": 0
           }

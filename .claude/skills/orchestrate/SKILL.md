@@ -7,7 +7,7 @@ argument: [--new] 기능 설명 (예: "로그인 기능")
 
 # /orchestrate
 
-Leader가 직접 스펙을 작성하고 Executor-Tester 듀얼 세션으로 실행합니다.
+Leader가 직접 스펙을 작성하고 Executor 세션으로 실행합니다. Tester는 Executor가 필요 시 on-demand로 생성합니다.
 
 ## 전체 흐름
 ```
@@ -16,13 +16,13 @@ Leader (직접 스펙 작성 → pending/)
   └──send-keys──→ Executor (exec-ears)
                       │
                       ├── 구현 → done/
-                      └──send-keys──→ Tester
-                                        │
-                                    ┌───┤
-                                    │   ├── 성공 → Leader (완료 알림)
-                                    │   │            └── review-team 실행
-                                    │   └── 실패 → Executor (수정 요청)
-                                    └───────────────┘ (E ↔ T 반복)
+                      └── Tester pane 생성 (on-demand)
+                            │
+                        ┌───┤
+                        │   ├── 성공 → Leader (완료 알림)
+                        │   │            └── review-quick 실행
+                        │   └── 실패 → Executor (수정 요청)
+                        └───────────────┘ (E ↔ T 반복)
 ```
 
 ## Arguments
@@ -45,25 +45,25 @@ else
 fi
 ```
 
-### 2. 스펙 작성
-Leader가 직접 EARS 스펙을 작성하여 `~/.claude/specs/{project}/pending/`에 저장합니다:
+### 2. 스펙 작성 (Leader가 직접 수행하는 유일한 코드 관련 작업)
+Leader가 EARS 스펙을 작성하여 `~/.claude/specs/{project}/pending/`에 저장합니다. **스펙 작성까지만 Leader의 역할이며, 구현은 반드시 Executor에게 위임합니다.**
 - 코드베이스를 탐색 (sub-agent 위임)하여 필요한 컨텍스트 수집
 - EARS 형식으로 스펙 작성 (Requirements, Scope, Acceptance Criteria)
 - `pending/`에 저장
 
-### 3. 듀얼 세션 확인/실행
+### 3. Executor 세션 확인/실행
 `--new` 플래그가 있거나 매칭되는 dual 윈도우가 없으면 새로 생성합니다:
 ```bash
 # 이 Leader의 dual 윈도우 목록 확인 (dual{N}-1, dual{N}-2, ...)
 tmux list-windows -F '#{window_name}' | grep "^dual${LID}-"
 
-# 새로 생성 (--new이거나 없을 때) — 자동으로 dual{N}-{M} 번호 증가
+# 새로 생성 (--new이거나 없을 때) — Executor만 생성 (Tester는 Executor가 필요 시 생성)
 LEADER_ID=$LID mise run claude-dual
 ```
 `--new`가 아니면 가장 최근 `dual{LID}-*` 윈도우를 재사용합니다.
 
 ### 4. Executor에게 명령 전달
-dual 윈도우의 좌측 pane(executor, index 0)에 exec-ears 명령을 전송합니다:
+dual 윈도우의 executor pane(index 0)에 exec-ears 명령을 전송합니다:
 ```bash
 DUAL_WIN=$(tmux list-windows -F '#{window_name}' | grep "^dual${LID}-" | tail -1)
 if [ -z "$DUAL_WIN" ]; then echo "dual 윈도우를 찾을 수 없습니다"; exit 1; fi
@@ -75,10 +75,10 @@ tmux send-keys -t "$EXECUTOR_PANE" -l '/exec-ears' && tmux send-keys -t "$EXECUT
 사용자에게 안내합니다:
 - "스펙을 작성하여 pending/에 저장했습니다"
 - "Executor에게 구현을 요청했습니다"
-- "Executor 구현 완료 후 Tester에게 테스트를 요청합니다"
+- "Executor 구현 완료 후 Tester pane을 생성하여 테스트합니다"
 - "Tester가 테스트 실패 시 Executor에게 수정 요청합니다 (E ↔ T 반복)"
 - "Tester가 테스트 성공 시 이 세션에 알림이 옵니다"
-- "완료 알림 수신 후 /review-team으로 검증을 실행합니다"
+- "완료 알림 수신 후 /review-quick으로 검증을 실행합니다"
 
 ### 6. 완료 후 검증
 Tester가 테스트 성공하면 이 세션에 메시지가 도착합니다.
@@ -89,9 +89,10 @@ Tester가 테스트 성공하면 이 세션에 메시지가 도착합니다.
 4. 리뷰 결과와 함께 사용자에게 최종 보고
 
 ## 주의사항
-- 듀얼 세션은 Leader와 동일한 디렉토리에서 열립니다
-- 2-pane 레이아웃: E(0) | T(1)
+- **CRITICAL: Leader는 절대 스펙을 직접 구현하지 않습니다. 반드시 Executor에게 전달합니다.**
+- Executor 세션은 Leader와 동일한 디렉토리에서 열립니다
+- Tester는 Executor가 구현 완료 후 on-demand로 pane을 생성합니다
 - Executor → Tester 테스트 요청은 executor-mode 규칙에 의해 자동 수행됩니다
 - Tester ↔ Executor 반복은 tester-mode 규칙에 의해 자동 수행됩니다
 - Tester → Leader 완료 알림은 tester-mode 규칙에 의해 자동 수행됩니다
-- Leader는 알림 수신 후 review-team을 수동 또는 자동으로 실행합니다
+- Leader는 알림 수신 후 review-quick을 수동 또는 자동으로 실행합니다

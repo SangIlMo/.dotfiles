@@ -17,7 +17,7 @@
 3. 스펙의 Scope와 Requirements에 따라 구현
 4. Acceptance Criteria 검증
 5. `done/`으로 이동, 파일 하단에 결과 요약 추가
-6. **Tester에게 테스트 요청**: tmux send-keys로 같은 윈도우 pane index 1 (tester)에 테스트 요청 전송
+6. **Tester pane을 on-demand 생성하고 테스트 요청 전송**
 
 ## 결과 요약 포맷
 ```
@@ -28,18 +28,27 @@
 - Notes: (실행 중 발견된 사항)
 ```
 
-## Tester에게 테스트 요청 방법
+## Tester pane 생성 및 테스트 요청 방법
 구현 완료 후 반드시 실행:
 ```bash
+# Tester pane이 없으면 생성
 TESTER_PANE=$(tmux list-panes -F '#{pane_index}:#{pane_id}' | grep '^1:' | cut -d: -f2)
+if [ -z "$TESTER_PANE" ]; then
+  LID="${CLAUDE_LEADER_ID:-1}"
+  tmux split-window -h -c "$PWD" "CLAUDE_LEADER_ID=${LID} CLAUDE_ROLE=tester ~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
+  sleep 3
+  TESTER_PANE=$(tmux list-panes -F '#{pane_index}:#{pane_id}' | grep '^1:' | cut -d: -f2)
+fi
+
+# 테스트 요청 전송
 if [ -n "$TESTER_PANE" ]; then
   tmux send-keys -t "$TESTER_PANE" -l "테스트 요청: {SPEC-ID}. 구현 완료된 스펙을 테스트해주세요." && tmux send-keys -t "$TESTER_PANE" Enter
 fi
 ```
-- 같은 윈도우의 pane index 1이 Tester입니다 (2-pane 레이아웃: E(0) | T(1))
+- Tester pane이 이미 존재하면 재사용합니다
 - 알림 전송 후 사용자에게 "tester에 테스트를 요청했습니다" 메시지 출력
 
 ## Tester로부터 수정 요청 수신 시
 - Tester가 테스트 실패 내용과 함께 수정 요청을 보냅니다
 - 에러 내용을 분석하고 코드를 수정합니다
-- 수정 완료 후 다시 Tester에게 테스트 요청을 보냅니다 (위 방법 반복)
+- 수정 완료 후 다시 Tester에게 테스트 요청을 보냅니다 (기존 pane 재사용)

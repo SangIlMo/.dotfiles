@@ -62,5 +62,6 @@
     "ralph-loop@claude-plugins-official": true
   },
   "teammateMode": "tmux",
-  "effortLevel": "low"
+  "effortLevel": "low",
+  "autoMemoryEnabled": true
 }

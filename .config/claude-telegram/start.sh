@@ -32,7 +32,7 @@ start_api() {
     echo "API server already running (PID $(cat "$PID_DIR/api.pid"))"
     return
   fi
-  API_KEY="$API_KEY" API_PORT="$API_PORT" nohup "$NODE" "$CONFIG_DIR/claude-api-server.js" > "$LOG_DIR/api.log" 2>&1 &
+  API_KEY="$API_KEY" API_PORT="$API_PORT" BOT_TOKEN="$BOT_TOKEN" nohup "$NODE" "$CONFIG_DIR/claude-api-server.js" > "$LOG_DIR/api.log" 2>&1 &
   echo $! > "$PID_DIR/api.pid"
   echo "API server started on port $API_PORT"
 }
