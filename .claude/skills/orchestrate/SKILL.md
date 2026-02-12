@@ -57,19 +57,25 @@ Leader (직접 스펙 작성 → pending/)
 
 선택된 경로를 `TARGET_DIR`에 저장합니다.
 
-### 1. Leader ID 결정
-현재 윈도우 이름에서 Leader ID를 추출하거나 새로 할당합니다:
+### 1. Leader Pane 식별
+현재 pane을 Leader pane으로 식별하고, 나중에 Executor/Tester가 찾을 수 있도록 합니다:
 ```bash
-CURRENT_WIN=$(tmux display-message -p '#{window_name}')
+# 현재 pane ID를 Leader pane ID로 저장
+LEADER_PANE_ID=$(tmux display-message -p '#{pane_id}')
+LEADER_PID=$$
 
-# 이미 leaderN이면 그 번호 사용, 아니면 최대값+1
-if echo "$CURRENT_WIN" | grep -qE '^leader[0-9]+$'; then
-  LID=$(echo "$CURRENT_WIN" | sed 's/^leader//')
-else
-  MAX_ID=$(tmux list-windows -F '#{window_name}' | sed -n 's/^leader\([0-9]\{1,\}\)$/\1/p' | sort -n | tail -1)
-  LID=$(( ${MAX_ID:-0} + 1 ))
-fi
+# 현재 윈도우 ID
+LEADER_WINDOW=$(tmux display-message -p '#{window_id}')
+
+# 나중에 Executor/Tester가 사용할 수 있도록 환경변수로 저장
+export CLAUDE_LEADER_PANE_ID="$LEADER_PANE_ID"
+export CLAUDE_LEADER_PID="$LEADER_PID"
+export CLAUDE_LEADER_WINDOW="$LEADER_WINDOW"
 ```
+
+✅ **Leader 식별 강화:**
+- Executor/Tester 세션에서 `$CLAUDE_LEADER_PANE_ID` 환경변수로 Leader pane 직접 접근
+- 윈도우명 파싱 불필요 (환경변수로 명시적 전달)
 
 ### 2. 스펙 작성 (Leader가 직접 수행하는 유일한 코드 관련 작업)
 Leader가 EARS 스펙을 작성하여 `~/.claude/specs/{project}/pending/`에 저장합니다. **스펙 작성까지만 Leader의 역할이며, 구현은 반드시 Executor에게 위임합니다.**
@@ -88,39 +94,68 @@ mkdir -p "$SPEC_DIR"
 - EARS 형식으로 스펙 작성 (Requirements, Scope, Acceptance Criteria)
 - `pending/`에 저장
 
-### 3. Executor 세션 확인/실행
-**항상 새 dual 세션을 생성합니다** (orchestrate는 매번 새로운 작업이므로):
+### 3. Executor Pane 생성
+**현재 윈도우에서 오른쪽으로 수직 분할하여 Executor pane을 생성합니다:**
 ```bash
-# 선택된 디렉토리(TARGET_DIR)로 이동하여 새 dual 세션 생성
-cd "$TARGET_DIR"
+# 현재 탭 내에서 오른쪽(50%)으로 수직 분할
+EXECUTOR_PANE=$(tmux split-window -h -c "$TARGET_DIR" -P -F '#{pane_id}' \
+  "CLAUDE_LEADER_PANE_ID='$CLAUDE_LEADER_PANE_ID' CLAUDE_LEADER_PID='$CLAUDE_LEADER_PID' CLAUDE_LEADER_WINDOW='$CLAUDE_LEADER_WINDOW' $SHELL")
 
-# 새로운 dual 세션 생성
-LEADER_ID=$LID mise run claude-dual
+# 창 크기 조정 (Leader 70%, Executor 30%)
+tmux resize-pane -t "$CLAUDE_LEADER_PANE_ID" -x 140  # 또는 사용자 선호에 따라
 ```
 
-**만약 `--new` 플래그가 없고 기존 dual 세션이 있으면:**
-- 사용자에게 "기존 dual 세션을 재사용할까요?" 확인
-- 재사용하면: 기존 dual 윈도우를 재사용
-- 새로 만들면: 위 명령으로 새 세션 생성
+**구조:**
+```
+┌─ Pane 0 (Leader)      │ Pane 1 (Executor)
+│ /orchestrate 실행     │ 대기 중
+│ 70%                   │ 30%
+└───────────────────────┴──────────────────
+```
+
+**Executor에서 환경변수 사용:**
+- Executor/Tester는 `$CLAUDE_LEADER_PANE_ID`로 Leader pane 직접 접근
+- 윈도우명 파싱 불필요
 
 ### 4. Executor에게 명령 전달
-dual 윈도우의 executor pane(index 0)에 exec-ears 명령을 전송합니다:
+생성된 Executor pane에 `/exec-ears` 명령을 전송합니다:
 ```bash
-DUAL_WIN=$(tmux list-windows -F '#{window_name}' | grep "^dual${LID}-" | tail -1)
-if [ -z "$DUAL_WIN" ]; then echo "dual 윈도우를 찾을 수 없습니다"; exit 1; fi
-EXECUTOR_PANE=$(tmux list-panes -t "$DUAL_WIN" -F '#{pane_id}' | head -1)
+# Executor pane은 스텝 3에서 반환된 $EXECUTOR_PANE
 tmux send-keys -t "$EXECUTOR_PANE" -l '/exec-ears' && tmux send-keys -t "$EXECUTOR_PANE" Enter
 ```
 
+**Executor pane 내부에서:**
+- Executor는 환경변수 `$CLAUDE_LEADER_PANE_ID`로 Leader pane 참조
+- Tester 필요 시 같은 창 내에서 아래쪽으로 분할 (`tmux split-window -v`)
+- Tester → Leader 메시지 전송: `tmux send-keys -t "$CLAUDE_LEADER_PANE_ID"`
+
 ### 5. 진행 모니터링
 사용자에게 안내합니다:
-- "📍 레포: {TARGET_DIR}, 브랜치: {BRANCH}"
-- "스펙을 작성하여 pending/에 저장했습니다"
-- "Executor 세션에서 구현을 시작했습니다 (dual${LID}-*)"
-- "Executor 구현 완료 후 Tester pane을 생성하여 테스트합니다"
-- "Tester가 테스트 실패 시 Executor에게 수정 요청합니다 (E ↔ T 반복)"
-- "Tester가 테스트 성공 시 이 세션에 알림이 옵니다"
-- "완료 알림 수신 후 /review-quick으로 검증을 실행합니다"
+```
+┌─────────────────────────────────────────────────────────┐
+│ 📍 Orchestrate 시작                                      │
+├─────────────────────────────────────────────────────────┤
+│ 레포: {TARGET_DIR}                                      │
+│ 브랜치: {BRANCH}                                        │
+│ Pane: Leader (좌 70%) | Executor (우 30%)             │
+├─────────────────────────────────────────────────────────┤
+│ ✅ 스펙 저장: {SPEC_FILE}                              │
+│ ✅ Executor pane 생성: {EXECUTOR_PANE}                 │
+│ ⏳ /exec-ears 실행 중...                               │
+│                                                         │
+│ 진행 과정:                                              │
+│  1. Executor가 스펙 구현 중                             │
+│  2. 테스트 필요 시 Tester pane 자동 생성              │
+│  3. Tester → Executor (E ↔ T 반복)                     │
+│  4. 완료 시 여기(Leader pane)에 메시지 도착            │
+│  5. /review-quick으로 최종 검증                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**조작:**
+- `Ctrl+B, {` / `Ctrl+B, }` — Pane 크기 조정
+- Executor pane 클릭 → Executor와 상호작용
+- Leader pane 클릭 → 메시지 대기
 
 ### 6. 완료 후 검증
 Tester가 테스트 성공하면 이 세션에 메시지가 도착합니다.
@@ -131,11 +166,35 @@ Tester가 테스트 성공하면 이 세션에 메시지가 도착합니다.
 4. 리뷰 결과와 함께 사용자에게 최종 보고
 
 ## 주의사항
+
+### 구조
+```
+현재 윈도우  ┌─ Leader (Pane 0, 70%)
+  │         │ /orchestrate 실행
+  │         │ 스펙 작성
+  │         │ (메시지 수신 대기)
+  │         │
+  └─────────┼─ Executor (Pane 1, 30%)
+            │ /exec-ears 실행
+            │ 구현 진행
+            │
+            └─ Tester (Pane 2, 필요시)
+              /exec-ears → Tester pane 분할
+
+환경변수 연결:
+  Leader → $CLAUDE_LEADER_PANE_ID
+         → $CLAUDE_LEADER_WINDOW
+         ↑ Executor/Tester가 이용
+```
+
+### 규칙
 - **CRITICAL: Leader는 절대 스펙을 직접 구현하지 않습니다. 반드시 Executor에게 전달합니다.**
-- **Executor 세션은 선택된 TARGET_DIR에서 열립니다** (사용자가 선택한 레포/worktree/브랜치)
-- orchestrate 실행 시점에 레포/worktree/브랜치를 선택할 수 있으므로, 여러 프로젝트를 오가며 작업 가능합니다
-- Tester는 Executor가 구현 완료 후 on-demand로 pane을 생성합니다
-- Executor → Tester 테스트 요청은 executor-mode 규칙에 의해 자동 수행됩니다
-- Tester ↔ Executor 반복은 tester-mode 규칙에 의해 자동 수행됩니다
-- Tester → Leader 완료 알림은 tester-mode 규칙에 의해 자동 수행됩니다
-- Leader는 알림 수신 후 review-quick을 수동 또는 자동으로 실행합니다
+- **같은 탭(윈도우) 내 pane 분할** — Leader (Pane 0, 70%) | Executor (Pane 1, 30%)
+- **환경변수로 명시적 전달** — `$CLAUDE_LEADER_PANE_ID`로 Leader pane을 환경변수로 참조 (윈도우명 파싱 불필요)
+- **Executor 세션 위치** — 선택된 TARGET_DIR에서 열림
+- **Tester 생성** — Executor가 구현 완료 후 현재 윈도우 내에서 아래쪽 분할로 생성
+- **메시지 전달** — tmux send-keys로 Executor/Tester → Leader로 직접 송수신
+- Executor → Tester 테스트 요청은 executor-mode 규칙에 의해 자동 수행
+- Tester ↔ Executor 반복은 tester-mode 규칙에 의해 자동 수행
+- Tester → Leader 완료 알림은 tester-mode 규칙에 의해 자동 수행
+- Leader는 알림 수신 후 review-quick을 수동 또는 자동으로 실행
