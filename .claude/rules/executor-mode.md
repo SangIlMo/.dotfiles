@@ -12,12 +12,13 @@
 - project = 현재 디렉토리의 basename
 
 ## 워크플로우
-1. `pending/` 스펙 목록 확인
-2. 스펙 선택 → `doing/`으로 이동
-3. 스펙의 Scope와 Requirements에 따라 구현
-4. Acceptance Criteria 검증
-5. `done/`으로 이동, 파일 하단에 결과 요약 추가
-6. **Tester pane을 on-demand 생성하고 테스트 요청 전송**
+1. 세션 파일 읽기: `$ORCHESTRATE_SESSION_FILE`에서 Leader pane ID 확인
+2. `pending/` 스펙 목록 확인
+3. 스펙 선택 → `doing/`으로 이동
+4. 스펙의 Scope와 Requirements에 따라 구현
+5. Acceptance Criteria 검증
+6. `done/`으로 이동, 파일 하단에 결과 요약 추가
+7. **Tester pane을 on-demand 생성하고 세션 파일 업데이트, 테스트 요청 전송**
 
 ## 결과 요약 포맷
 ```

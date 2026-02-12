@@ -57,25 +57,52 @@ Leader (직접 스펙 작성 → pending/)
 
 선택된 경로를 `TARGET_DIR`에 저장합니다.
 
-### 1. Leader Pane 식별
-현재 pane을 Leader pane으로 식별하고, 나중에 Executor/Tester가 찾을 수 있도록 합니다:
+### 1. 세션 레지스트리 생성
+orchestrate 실행마다 **고유 세션 파일**을 생성하여 Leader-Executor-Tester 간 통신을 안정적으로 합니다:
+
 ```bash
-# 현재 pane ID를 Leader pane ID로 저장
-LEADER_PANE_ID=$(tmux display-message -p '#{pane_id}')
-LEADER_PID=$$
+# 고유 세션 ID 생성 (타임스탬프 기반)
+SESSION_ID="orch-$(date +%s)"
 
-# 현재 윈도우 ID
-LEADER_WINDOW=$(tmux display-message -p '#{window_id}')
+# 세션 레지스트리 디렉토리
+SESSION_DIR="$HOME/.claude/orchestrate/sessions"
+mkdir -p "$SESSION_DIR"
 
-# 나중에 Executor/Tester가 사용할 수 있도록 환경변수로 저장
-export CLAUDE_LEADER_PANE_ID="$LEADER_PANE_ID"
-export CLAUDE_LEADER_PID="$LEADER_PID"
-export CLAUDE_LEADER_WINDOW="$LEADER_WINDOW"
+# 세션 파일 생성 (JSON)
+SESSION_FILE="$SESSION_DIR/${SESSION_ID}.json"
+
+cat > "$SESSION_FILE" <<EOF
+{
+  "session_id": "$SESSION_ID",
+  "spec_id": "{SPEC-ID}",
+  "target_dir": "$TARGET_DIR",
+  "status": "leader_active",
+  "created_at": "$(date -Iseconds)",
+  "leader": {
+    "pane_id": "$(tmux display-message -p '#{pane_id}')",
+    "window_id": "$(tmux display-message -p '#{window_id}')",
+    "pid": "$$"
+  },
+  "executor": {
+    "pane_id": null,
+    "status": "pending"
+  },
+  "tester": {
+    "pane_id": null,
+    "status": "pending"
+  }
+}
+EOF
+
+# Executor/Tester가 접근할 수 있도록 환경변수로 전달
+export ORCHESTRATE_SESSION_ID="$SESSION_ID"
+export ORCHESTRATE_SESSION_FILE="$SESSION_FILE"
 ```
 
-✅ **Leader 식별 강화:**
-- Executor/Tester 세션에서 `$CLAUDE_LEADER_PANE_ID` 환경변수로 Leader pane 직접 접근
-- 윈도우명 파싱 불필요 (환경변수로 명시적 전달)
+✅ **파일 기반 통신:**
+- Executor는 `$ORCHESTRATE_SESSION_FILE`에서 Leader pane ID 읽음
+- Tester도 동일하게 Executor pane ID 읽음
+- pane 파싱/윈도우명 검색 불필요 (파일에 명시적으로 저장)
 
 ### 2. 스펙 작성 (Leader가 직접 수행하는 유일한 코드 관련 작업)
 Leader가 EARS 스펙을 작성하여 `~/.claude/specs/{project}/pending/`에 저장합니다. **스펙 작성까지만 Leader의 역할이며, 구현은 반드시 Executor에게 위임합니다.**
@@ -94,15 +121,21 @@ mkdir -p "$SPEC_DIR"
 - EARS 형식으로 스펙 작성 (Requirements, Scope, Acceptance Criteria)
 - `pending/`에 저장
 
-### 3. Executor Pane 생성
+### 3. Executor Pane 생성 및 세션 업데이트
 **현재 윈도우에서 오른쪽으로 수직 분할하여 Executor pane을 생성합니다:**
 ```bash
 # 현재 탭 내에서 오른쪽(50%)으로 수직 분할
 EXECUTOR_PANE=$(tmux split-window -h -c "$TARGET_DIR" -P -F '#{pane_id}' \
-  "CLAUDE_LEADER_PANE_ID='$CLAUDE_LEADER_PANE_ID' CLAUDE_LEADER_PID='$CLAUDE_LEADER_PID' CLAUDE_LEADER_WINDOW='$CLAUDE_LEADER_WINDOW' $SHELL")
+  "ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' $SHELL")
 
 # 창 크기 조정 (Leader 70%, Executor 30%)
-tmux resize-pane -t "$CLAUDE_LEADER_PANE_ID" -x 140  # 또는 사용자 선호에 따라
+LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
+tmux resize-pane -t "$LEADER_PANE" -x 140
+
+# 세션 파일 업데이트 (Executor pane ID 저장)
+jq ".executor.pane_id = \"$EXECUTOR_PANE\" | .status = \"executor_ready\"" \
+  "$ORCHESTRATE_SESSION_FILE" > "${ORCHESTRATE_SESSION_FILE}.tmp" && \
+  mv "${ORCHESTRATE_SESSION_FILE}.tmp" "$ORCHESTRATE_SESSION_FILE"
 ```
 
 **구조:**
@@ -111,11 +144,17 @@ tmux resize-pane -t "$CLAUDE_LEADER_PANE_ID" -x 140  # 또는 사용자 선호�
 │ /orchestrate 실행     │ 대기 중
 │ 70%                   │ 30%
 └───────────────────────┴──────────────────
+세션 파일: ~/.claude/orchestrate/sessions/orch-{timestamp}.json
 ```
 
-**Executor에서 환경변수 사용:**
-- Executor/Tester는 `$CLAUDE_LEADER_PANE_ID`로 Leader pane 직접 접근
-- 윈도우명 파싱 불필요
+**Executor에서 세션 파일 사용:**
+```bash
+# 세션 파일에서 Leader pane ID 읽기
+LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
+
+# Leader에게 메시지 전송
+tmux send-keys -t "$LEADER_PANE" -l "메시지" && tmux send-keys -t "$LEADER_PANE" Enter
+```
 
 ### 4. Executor에게 명령 전달
 생성된 Executor pane에 `/exec-ears` 명령을 전송합니다:

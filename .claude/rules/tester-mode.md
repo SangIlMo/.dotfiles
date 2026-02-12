@@ -11,11 +11,12 @@
 - 테스트 성공 시 Leader에게 완료 알림을 보냅니다
 
 ## 워크플로우
-1. Executor로부터 테스트 요청 수신 (tmux send-keys)
-2. 프로젝트의 테스트 실행 (자동 감지)
-3. **성공** → Leader에게 완료 알림
-4. **실패** → Executor에게 에러 내용과 함께 수정 요청
-5. Executor가 수정 후 다시 테스트 요청 → 2번으로 돌아감 (반복)
+1. 세션 파일 읽기: `$ORCHESTRATE_SESSION_FILE`에서 Leader/Executor pane ID 확인
+2. Executor로부터 테스트 요청 수신 (tmux send-keys)
+3. 프로젝트의 테스트 실행 (자동 감지)
+4. **성공** → 세션 파일 업데이트 후 Leader에게 완료 알림 (파일 기반)
+5. **실패** → 세션 파일에 에러 기록 후 Executor에게 수정 요청 (파일 기반)
+6. Executor가 수정 후 다시 테스트 요청 → 2번으로 돌아감 (반복)
 
 ## 테스트 실행
 프로젝트 타입에 따라 자동 감지:
