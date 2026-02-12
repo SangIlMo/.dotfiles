@@ -158,18 +158,18 @@ Leader 탭 (window_id: @4)
 LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
 
 # Leader에게 메시지 전송 (tmux send-keys 올바른 형식)
-tmux send-keys -t "$LEADER_PANE" "메시지 내용" Enter
+tmux send-keys -t "$LEADER_PANE" "메시지 내용" C-m
 ```
 
 ⚠️ **주의:**
 - `-l` 플래그는 사용하지 않음 (글자별 입력 → 문제 발생)
-- `tmux send-keys -t PANE "명령" Enter` 형식으로 한 번에 전송
+- `tmux send-keys -t PANE "명령" C-m` 형식 (Enter 대신 C-m 사용)
 
 ### 4. Executor에게 명령 전달
 생성된 Executor pane에 `/exec-ears` 명령을 전송합니다:
 ```bash
 # Executor pane은 스텝 3에서 반환된 $EXECUTOR_PANE (이미 claude 실행 중)
-tmux send-keys -t "$EXECUTOR_PANE" "/exec-ears" Enter
+tmux send-keys -t "$EXECUTOR_PANE" "/exec-ears" C-m
 ```
 
 **주의:**

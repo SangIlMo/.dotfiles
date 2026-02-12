@@ -42,7 +42,7 @@
 EXECUTOR_PANE=$(jq -r '.executor.pane_id' "$ORCHESTRATE_SESSION_FILE")
 
 if [ -n "$EXECUTOR_PANE" ] && [ "$EXECUTOR_PANE" != "null" ]; then
-  tmux send-keys -t "$EXECUTOR_PANE" "테스트 실패: {SPEC-ID}. 에러: {에러 요약}. 수정 후 다시 테스트 요청해주세요." Enter
+  tmux send-keys -t "$EXECUTOR_PANE" "테스트 실패: {SPEC-ID}. 에러: {에러 요약}. 수정 후 다시 테스트 요청해주세요." C-m
 fi
 ```
 
@@ -52,7 +52,7 @@ fi
 EXECUTOR_PANE=$(jq -r '.executor.pane_id' "$ORCHESTRATE_SESSION_FILE")
 
 if [ -n "$EXECUTOR_PANE" ] && [ "$EXECUTOR_PANE" != "null" ]; then
-  tmux send-keys -t "$EXECUTOR_PANE" "테스트 성공: {SPEC-ID} 구현 완료. Executor가 Leader에게 알립니다." Enter
+  tmux send-keys -t "$EXECUTOR_PANE" "테스트 성공: {SPEC-ID} 구현 완료. Executor가 Leader에게 알립니다." C-m
 fi
 ```
 
@@ -61,7 +61,7 @@ Leader에게는 Executor가 알립니다. (정보 흐름 명확화)
 
 **메모:**
 - `-l` 플래그 제거 (줄바꿈 문제 해결)
-- `tmux send-keys -t PANE "메시지" Enter` 형식 (한 번에 전송)
+- `tmux send-keys -t PANE "메시지" C-m` 형식 (Enter 대신 C-m 사용)
 
 ## 종료 조건
 - **테스트 성공**: Executor에게 "성공" 메시지 전송 후 `/exit`으로 세션 종료 (pane 자동 닫힘)

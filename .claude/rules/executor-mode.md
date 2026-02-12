@@ -51,14 +51,14 @@ fi
 
 # 테스트 요청 전송 (올바른 tmux send-keys 형식)
 if [ -n "$TESTER_PANE" ] && [ "$TESTER_PANE" != "null" ]; then
-  tmux send-keys -t "$TESTER_PANE" "테스트 요청: {SPEC-ID}. 구현 완료된 스펙을 테스트해주세요." Enter
+  tmux send-keys -t "$TESTER_PANE" "테스트 요청: {SPEC-ID}. 구현 완료된 스펙을 테스트해주세요." C-m
 fi
 ```
 
 **메모:**
 - Tester pane이 이미 존재하면 재사용합니다 (세션 파일에서 확인)
 - `-l` 플래그 제거 (줄바꿈 문제 해결)
-- `tmux send-keys -t PANE "메시지" Enter` 형식 (한 번에 전송)
+- `tmux send-keys -t PANE "메시지" C-m` 형식 (Enter 대신 C-m 사용)
 
 ## Tester로부터 메시지 수신 및 Leader에게 완료 알림
 Tester가 테스트 결과를 보낸 후 Executor가 수행할 작업:
@@ -72,7 +72,7 @@ Tester가 테스트 결과를 보낸 후 Executor가 수행할 작업:
 LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
 
 if [ -n "$LEADER_PANE" ] && [ "$LEADER_PANE" != "null" ]; then
-  tmux send-keys -t "$LEADER_PANE" "EARS 스펙 완료 (테스트 통과): {SPEC-ID}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." Enter
+  tmux send-keys -t "$LEADER_PANE" "EARS 스펙 완료 (테스트 통과): {SPEC-ID}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." C-m
 fi
 ```
 
