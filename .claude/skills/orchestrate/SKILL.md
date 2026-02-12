@@ -128,9 +128,9 @@ mkdir -p "$SPEC_DIR"
 LEADER_WINDOW=$(jq -r '.leader.window_id' "$ORCHESTRATE_SESSION_FILE")
 
 # Leader 탭 내에서 오른쪽(50%)으로 수직 분할
-# mise run z.ai:claude 실행 (바로 Claude 시작)
+# mise run z.ai:claude 실행 (바로 Claude 시작, bypass 옵션 포함)
 EXECUTOR_PANE=$(tmux split-window -h -t "$LEADER_WINDOW" -c "$TARGET_DIR" -P -F '#{pane_id}' \
-  "cd '$TARGET_DIR' && ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' mise run z.ai:claude")
+  "cd '$TARGET_DIR' && ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' mise run z.ai:claude -- --dangerously-skip-permissions")
 
 # 창 크기 조정 (Leader 70%, Executor 30%)
 LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")

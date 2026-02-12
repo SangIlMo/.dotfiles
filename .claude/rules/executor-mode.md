@@ -39,7 +39,7 @@ LEADER_WINDOW=$(jq -r '.leader.window_id' "$ORCHESTRATE_SESSION_FILE")
 TESTER_PANE=$(jq -r '.tester.pane_id' "$ORCHESTRATE_SESSION_FILE")
 if [ "$TESTER_PANE" = "null" ] || [ -z "$TESTER_PANE" ]; then
   TESTER_PANE=$(tmux split-window -v -t "$LEADER_WINDOW" -c "$PWD" -P -F '#{pane_id}' \
-    "ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' CLAUDE_ROLE=tester mise run z.ai:claude")
+    "ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' CLAUDE_ROLE=tester mise run z.ai:claude -- --dangerously-skip-permissions")
 
   # 세션 파일 업데이트 (Tester pane ID 저장)
   jq ".tester.pane_id = \"$TESTER_PANE\" | .tester.status = \"ready\"" \
