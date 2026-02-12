@@ -31,21 +31,28 @@
 ## Executor에게 수정 요청 방법
 테스트 실패 시:
 ```bash
-EXECUTOR_PANE=$(tmux list-panes -F '#{pane_index}:#{pane_id}' | grep '^0:' | cut -d: -f2)
-if [ -n "$EXECUTOR_PANE" ]; then
-  tmux send-keys -t "$EXECUTOR_PANE" -l "테스트 실패: {SPEC-ID}. 에러: {에러 요약}. 수정 후 다시 테스트 요청해주세요." && tmux send-keys -t "$EXECUTOR_PANE" Enter
+# 세션 파일에서 Executor pane ID 읽기
+EXECUTOR_PANE=$(jq -r '.executor.pane_id' "$ORCHESTRATE_SESSION_FILE")
+
+if [ -n "$EXECUTOR_PANE" ] && [ "$EXECUTOR_PANE" != "null" ]; then
+  tmux send-keys -t "$EXECUTOR_PANE" "테스트 실패: {SPEC-ID}. 에러: {에러 요약}. 수정 후 다시 테스트 요청해주세요." Enter
 fi
 ```
-- 같은 윈도우의 pane index 0이 Executor입니다
 
 ## Leader에게 완료 알림 방법
 테스트 성공 시:
 ```bash
-LEADER_PANE=$(~/.claude/lib/find-leader.sh)
-if [ -n "$LEADER_PANE" ]; then
-  tmux send-keys -t "$LEADER_PANE" -l "EARS 스펙 완료 (테스트 통과): {SPEC-ID}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." && tmux send-keys -t "$LEADER_PANE" Enter
+# 세션 파일에서 Leader pane ID 읽기
+LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
+
+if [ -n "$LEADER_PANE" ] && [ "$LEADER_PANE" != "null" ]; then
+  tmux send-keys -t "$LEADER_PANE" "EARS 스펙 완료 (테스트 통과): {SPEC-ID}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." Enter
 fi
 ```
+
+**메모:**
+- `-l` 플래그 제거 (줄바꿈 문제 해결)
+- `tmux send-keys -t PANE "메시지" Enter` 형식 (한 번에 전송)
 
 ## 종료 조건
 - **테스트 성공**: Leader에게 완료 알림 전송 후 `/exit`으로 세션 종료 (pane 자동 닫힘)

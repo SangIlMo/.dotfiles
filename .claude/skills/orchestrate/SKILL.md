@@ -122,11 +122,15 @@ mkdir -p "$SPEC_DIR"
 - `pending/`에 저장
 
 ### 3. Executor Pane 생성 및 세션 업데이트
-**현재 윈도우에서 오른쪽으로 수직 분할하여 Executor pane을 생성합니다:**
+**Leader가 있는 탭(window) 내에서 오른쪽으로 수직 분할하여 Executor pane을 생성합니다:**
 ```bash
-# 현재 탭 내에서 오른쪽(50%)으로 수직 분할
-EXECUTOR_PANE=$(tmux split-window -h -c "$TARGET_DIR" -P -F '#{pane_id}' \
-  "ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' $SHELL")
+# 세션 파일에서 Leader의 window ID 읽기
+LEADER_WINDOW=$(jq -r '.leader.window_id' "$ORCHESTRATE_SESSION_FILE")
+
+# Leader 탭 내에서 오른쪽(50%)으로 수직 분할
+# mise run z.ai:claude 실행 (바로 Claude 시작)
+EXECUTOR_PANE=$(tmux split-window -h -t "$LEADER_WINDOW" -c "$TARGET_DIR" -P -F '#{pane_id}' \
+  "cd '$TARGET_DIR' && ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' mise run z.ai:claude")
 
 # 창 크기 조정 (Leader 70%, Executor 30%)
 LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
@@ -140,10 +144,11 @@ jq ".executor.pane_id = \"$EXECUTOR_PANE\" | .status = \"executor_ready\"" \
 
 **구조:**
 ```
-┌─ Pane 0 (Leader)      │ Pane 1 (Executor)
-│ /orchestrate 실행     │ 대기 중
-│ 70%                   │ 30%
-└───────────────────────┴──────────────────
+Leader 탭 (window_id: @4)
+├─ Pane 0 (Leader)          │ Pane 1 (Executor)
+│ /orchestrate 실행         │ mise run z.ai:claude
+│ 70%                       │ 30%
+└───────────────────────────┴──────────────────
 세션 파일: ~/.claude/orchestrate/sessions/orch-{timestamp}.json
 ```
 
@@ -152,21 +157,31 @@ jq ".executor.pane_id = \"$EXECUTOR_PANE\" | .status = \"executor_ready\"" \
 # 세션 파일에서 Leader pane ID 읽기
 LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
 
-# Leader에게 메시지 전송
-tmux send-keys -t "$LEADER_PANE" -l "메시지" && tmux send-keys -t "$LEADER_PANE" Enter
+# Leader에게 메시지 전송 (tmux send-keys 올바른 형식)
+tmux send-keys -t "$LEADER_PANE" "메시지 내용" Enter
 ```
+
+⚠️ **주의:**
+- `-l` 플래그는 사용하지 않음 (글자별 입력 → 문제 발생)
+- `tmux send-keys -t PANE "명령" Enter` 형식으로 한 번에 전송
 
 ### 4. Executor에게 명령 전달
 생성된 Executor pane에 `/exec-ears` 명령을 전송합니다:
 ```bash
-# Executor pane은 스텝 3에서 반환된 $EXECUTOR_PANE
-tmux send-keys -t "$EXECUTOR_PANE" -l '/exec-ears' && tmux send-keys -t "$EXECUTOR_PANE" Enter
+# Executor pane은 스텝 3에서 반환된 $EXECUTOR_PANE (이미 claude 실행 중)
+tmux send-keys -t "$EXECUTOR_PANE" "/exec-ears" Enter
 ```
 
+**주의:**
+- Executor pane은 이미 `mise run z.ai:claude`로 실행 중
+- `/exec-ears` 스킬 명령을 실행
+- `-l` 플래그 제거 (줄바꿈 문제)
+- `tmux send-keys -t PANE "명령" Enter` 형식
+
 **Executor pane 내부에서:**
-- Executor는 환경변수 `$CLAUDE_LEADER_PANE_ID`로 Leader pane 참조
-- Tester 필요 시 같은 창 내에서 아래쪽으로 분할 (`tmux split-window -v`)
-- Tester → Leader 메시지 전송: `tmux send-keys -t "$CLAUDE_LEADER_PANE_ID"`
+- 세션 파일 `$ORCHESTRATE_SESSION_FILE`로 Leader pane 참조
+- Tester 필요 시 같은 창 내에서 아래쪽으로 분할 (`tmux split-window -v -t "$LEADER_WINDOW"`)
+- Tester → Leader 메시지 전송: `tmux send-keys -t $(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")`
 
 ### 5. 진행 모니터링
 사용자에게 안내합니다:
@@ -176,23 +191,28 @@ tmux send-keys -t "$EXECUTOR_PANE" -l '/exec-ears' && tmux send-keys -t "$EXECUT
 ├─────────────────────────────────────────────────────────┤
 │ 레포: {TARGET_DIR}                                      │
 │ 브랜치: {BRANCH}                                        │
-│ Pane: Leader (좌 70%) | Executor (우 30%)             │
+│ 세션: {SESSION_ID}                                      │
+│                                                         │
+│ 구조: [Leader Pane (70%) | Executor Pane (30%)]        │
+│       [                 Tester (필요시)                 ]
 ├─────────────────────────────────────────────────────────┤
 │ ✅ 스펙 저장: {SPEC_FILE}                              │
 │ ✅ Executor pane 생성: {EXECUTOR_PANE}                 │
+│ ✅ 세션 파일: {ORCHESTRATE_SESSION_FILE}               │
 │ ⏳ /exec-ears 실행 중...                               │
 │                                                         │
 │ 진행 과정:                                              │
-│  1. Executor가 스펙 구현 중                             │
-│  2. 테스트 필요 시 Tester pane 자동 생성              │
+│  1. Executor가 스펙 구현 중 (우측)                      │
+│  2. 테스트 필요 시 Tester pane 자동 생성 (아래)        │
 │  3. Tester → Executor (E ↔ T 반복)                     │
-│  4. 완료 시 여기(Leader pane)에 메시지 도착            │
+│  4. 완료 시 Leader pane에 메시지 도착                  │
 │  5. /review-quick으로 최종 검증                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
 **조작:**
 - `Ctrl+B, {` / `Ctrl+B, }` — Pane 크기 조정
+- `Ctrl+B, →` / `Ctrl+B, ↓` — Pane 이동
 - Executor pane 클릭 → Executor와 상호작용
 - Leader pane 클릭 → 메시지 대기
 
