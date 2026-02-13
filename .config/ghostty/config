@@ -40,4 +40,4 @@ keybind = super+shift+enter=new_window
 # Bold 텍스트에 Bright 색상 사용 (iTerm2와 동일)
 bold-is-bright = true
 
-background-opacity = 0.85
+background-opacity = 0.80

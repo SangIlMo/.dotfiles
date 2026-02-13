@@ -32,13 +32,14 @@
 ## Tester pane 생성 및 테스트 요청 방법
 구현 완료 후 반드시 실행:
 ```bash
-# 세션 파일에서 Leader의 window ID 읽기
-LEADER_WINDOW=$(jq -r '.leader.window_id' "$ORCHESTRATE_SESSION_FILE")
+# 세션 파일에서 Leader의 pane ID 읽기 (같은 윈도우에 생성하기 위해)
+LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
+LEADER_WINDOW=$(tmux display-message -p -t "$LEADER_PANE" '#{window_id}')
 
 # Tester pane이 없으면 Leader 탭 내에서 아래로 분할 생성
 TESTER_PANE=$(jq -r '.tester.pane_id' "$ORCHESTRATE_SESSION_FILE")
 if [ "$TESTER_PANE" = "null" ] || [ -z "$TESTER_PANE" ]; then
-  TESTER_PANE=$(tmux split-window -v -t "$LEADER_WINDOW" -c "$PWD" -P -F '#{pane_id}' \
+  TESTER_PANE=$(tmux split-window -v -t "$LEADER_PANE" -c "$PWD" -P -F '#{pane_id}' \
     "ORCHESTRATE_SESSION_ID='$ORCHESTRATE_SESSION_ID' ORCHESTRATE_SESSION_FILE='$ORCHESTRATE_SESSION_FILE' CLAUDE_ROLE=tester mise run z.ai:claude -- --dangerously-skip-permissions")
 
   # 세션 파일 업데이트 (Tester pane ID 저장)
@@ -56,31 +57,30 @@ fi
 ```
 
 **메모:**
+- Tester pane이 **같은 윈도우**에 생성됩니다 (Leader pane 아래로 분할)
 - Tester pane이 이미 존재하면 재사용합니다 (세션 파일에서 확인)
-- `-l` 플래그 제거 (줄바꿈 문제 해결)
 - `tmux send-keys -t PANE "메시지" C-m` 형식 (Enter 대신 C-m 사용)
 
-## Tester로부터 메시지 수신 및 Leader에게 완료 알림
+## Tester로부터 메시지 수신 및 Executor 역할
 Tester가 테스트 결과를 보낸 후 Executor가 수행할 작업:
 
 ```bash
 # Tester로부터 메시지 수신 (tmux send-keys로 입력됨)
 # - 테스트 실패: Executor가 수정 후 다시 테스트 요청
-# - 테스트 성공: 아래 실행
+# - 테스트 성공: 세션 파일 업데이트
 
-# 테스트 성공 시 Leader에게 최종 완료 알림
-LEADER_PANE=$(jq -r '.leader.pane_id' "$ORCHESTRATE_SESSION_FILE")
-
-if [ -n "$LEADER_PANE" ] && [ "$LEADER_PANE" != "null" ]; then
-  tmux send-keys -t "$LEADER_PANE" "EARS 스펙 완료 (테스트 통과): {SPEC-ID}. /specs-status 로 확인 후 /review-quick 으로 검증하세요." C-m
-fi
+# 테스트 성공 시 세션 파일만 업데이트 (Leader에게 보고는 Tester가 함)
+jq ".executor.status = \"completed\"" \
+  "$ORCHESTRATE_SESSION_FILE" > "${ORCHESTRATE_SESSION_FILE}.tmp" && \
+  mv "${ORCHESTRATE_SESSION_FILE}.tmp" "$ORCHESTRATE_SESSION_FILE"
 ```
 
 **흐름:**
 1. Executor → Tester에게 테스트 요청
-2. Tester → Executor에게 결과 전송
-3. **성공:** Executor → Leader에게 최종 완료 알림
-4. **실패:** Executor가 수정 후 2번 반복
+2. Tester → Leader에게 결과 직접 보고 (다음 섹션 참조)
+3. Tester → Executor에게 수정 요청만 전송 (실패 시)
+4. **성공:** Executor는 세션 파일 업데이트만 수행
+5. **실패:** Executor가 수정 후 2번 반복
 
 ## Tester로부터 수정 요청 수신 시
 - Tester가 테스트 실패 내용과 함께 수정 요청을 보냅니다
