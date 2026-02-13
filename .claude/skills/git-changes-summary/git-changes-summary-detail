@@ -1,0 +1,146 @@
+#!/bin/bash
+set -e
+
+# git-changes-summary-detail skill
+# Provides AI-powered summaries of each file's changes
+# Usage: git-changes-summary-detail [BASE_BRANCH]
+
+BASE_BRANCH="${1:-main}"
+
+# Check git repo
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+  echo "❌ Not a git repository"
+  exit 1
+fi
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Check if base branch exists
+if ! git rev-parse --verify "$BASE_BRANCH" > /dev/null 2>&1; then
+  echo "❌ Base branch '$BASE_BRANCH' not found"
+  exit 1
+fi
+
+# Get list of changed files
+CHANGED_FILES=$(git diff "$BASE_BRANCH..HEAD" --name-only 2>/dev/null || git diff "$BASE_BRANCH" --name-only)
+
+if [ -z "$CHANGED_FILES" ]; then
+  echo "ℹ️  No changes between '$BASE_BRANCH' and current branch"
+  exit 0
+fi
+
+FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l)
+
+echo ""
+echo "📊 Git Branch Changes (with AI Summaries)"
+echo "=========================================="
+echo ""
+echo "Current Branch: $CURRENT_BRANCH"
+echo "Base Branch: $BASE_BRANCH"
+echo "Analyzing $FILE_COUNT file(s)..."
+echo ""
+
+# Collect all diffs for analysis
+TEMP_ANALYSIS=$(mktemp)
+trap "rm -f $TEMP_ANALYSIS" EXIT
+
+{
+  echo "# Code Changes Analysis"
+  echo ""
+  echo "Analyze each file's changes and provide a brief summary."
+  echo "Focus on WHAT changed and WHY it matters."
+  echo ""
+  echo "For each file, output:"
+  echo "\`\`\`"
+  echo "## 📝 filename"
+  echo "- key change 1"
+  echo "- key change 2"
+  echo "- key change 3 (if applicable)"
+  echo "\`\`\`"
+  echo ""
+  echo "---"
+  echo ""
+
+  TOTAL_ADD=0
+  TOTAL_DEL=0
+
+  while IFS= read -r FILE; do
+    if [ -z "$FILE" ]; then
+      continue
+    fi
+
+    # Get numstat for this file
+    NUMSTAT=$(git diff "$BASE_BRANCH..HEAD" --numstat -- "$FILE" 2>/dev/null | head -1 || echo "")
+    if [ -n "$NUMSTAT" ]; then
+      ADD=$(echo "$NUMSTAT" | awk '{print $1}')
+      DEL=$(echo "$NUMSTAT" | awk '{print $2}')
+      [[ "$ADD" == "-" ]] && ADD=0
+      [[ "$DEL" == "-" ]] && DEL=0
+      TOTAL_ADD=$((TOTAL_ADD + ADD))
+      TOTAL_DEL=$((TOTAL_DEL + DEL))
+    else
+      ADD=0
+      DEL=0
+    fi
+
+    echo "## File: $FILE (+$ADD lines, -$DEL lines)"
+    echo ""
+    echo "Git diff:"
+    echo "\`\`\`diff"
+    git diff "$BASE_BRANCH..HEAD" -- "$FILE" 2>/dev/null | head -50 || echo "(binary or no diff)"
+    echo "\`\`\`"
+    echo ""
+
+  done <<< "$CHANGED_FILES"
+
+  echo "---"
+  echo ""
+  echo "## Summary Statistics"
+  echo "- Total additions: +$TOTAL_ADD"
+  echo "- Total deletions: -$TOTAL_DEL"
+  echo "- Files changed: $FILE_COUNT"
+
+} > "$TEMP_ANALYSIS"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Use Task tool to get summaries (if available)
+# For now, just show the files with statistics
+TOTAL_ADD=0
+TOTAL_DEL=0
+
+while IFS= read -r FILE; do
+  if [ -z "$FILE" ]; then
+    continue
+  fi
+
+  NUMSTAT=$(git diff "$BASE_BRANCH..HEAD" --numstat -- "$FILE" 2>/dev/null | head -1 || echo "")
+  if [ -n "$NUMSTAT" ]; then
+    ADD=$(echo "$NUMSTAT" | awk '{print $1}')
+    DEL=$(echo "$NUMSTAT" | awk '{print $2}')
+    [[ "$ADD" == "-" ]] && ADD=0
+    [[ "$DEL" == "-" ]] && DEL=0
+    TOTAL_ADD=$((TOTAL_ADD + ADD))
+    TOTAL_DEL=$((TOTAL_DEL + DEL))
+  else
+    ADD=0
+    DEL=0
+  fi
+
+  echo "📝 $FILE"
+  echo "   +$ADD -$DEL"
+  echo ""
+
+done <<< "$CHANGED_FILES"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "📊 Summary"
+echo "───────────────────────────────────────────────"
+echo "Total additions: +$TOTAL_ADD"
+echo "Total deletions: -$TOTAL_DEL"
+echo "Files changed:   $FILE_COUNT"
+echo ""
+echo "📌 For AI-powered summaries, use: /review-quick"
+echo ""
