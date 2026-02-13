@@ -1,3 +1,38 @@
+# tmux send-keys 올바른 형식
+
+## ⚠️ 중요: Enter 키 입력 문제
+
+**틀린 형식 (안 먹음):**
+```bash
+tmux send-keys -t PANE -l "command" && tmux send-keys -t PANE Enter
+```
+
+**올바른 형식 (먹음):**
+```bash
+tmux send-keys -t PANE "command" C-m
+# 또는
+tmux send-keys -t PANE "command" Enter
+```
+
+### 핵심 포인트
+- **`-l` 플래그 금지**: 리터럴 문자열로 처리되어 Enter 키가 안 먹힘
+- **한 번의 send-keys**: "텍스트" 뒤에 `C-m` 또는 `Enter` 키를 붙여서 한 번에 실행
+- **`&&` 체이닝 금지**: 첫 명령 실패 시 두 번째 미실행
+- **일관성**: 모든 send-keys를 `C-m`으로 통일 (tmux 표준)
+
+### 올바른 예제
+```bash
+# Executor에게 명령 전송
+EXECUTOR_PANE=$(tmux list-panes -F '#{pane_index}:#{pane_id}' | grep '^0:' | cut -d: -f2)
+tmux send-keys -t "$EXECUTOR_PANE" "/exec-ears spec.md" C-m
+
+# Tester에게 메시지 전송
+TESTER_PANE=$(jq -r '.tester.pane_id' "$ORCHESTRATE_SESSION_FILE")
+tmux send-keys -t "$TESTER_PANE" "테스트 요청: SPEC-001" C-m
+```
+
+---
+
 # Orchestrate Architecture - Session Registry Pattern
 
 ## 문제점 (해결됨)

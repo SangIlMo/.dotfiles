@@ -42,7 +42,10 @@
 4. `pending/`에 저장
 5. **Executor에게 자동 전달**: 스펙 저장 후 tmux send-keys로 executor pane에 실행 명령 전송
    ```bash
-   tmux send-keys -t {executor-pane-id} -l '/exec-ears {spec-filename}' && tmux send-keys -t {executor-pane-id} Enter
+   EXECUTOR_PANE=$(tmux list-panes -F '#{pane_index}:#{pane_id}' | grep '^0:' | cut -d: -f2)
+
+   # 명령 전송 (한 번에, Enter 포함)
+   tmux send-keys -t "$EXECUTOR_PANE" "/exec-ears {spec-filename}" C-m
    ```
    - executor pane은 현재 윈도우의 pane index 0 (2-pane: E(0) | T(1))
    - `tmux list-panes -F '#{pane_index}:#{pane_id}'`로 pane ID 확인
