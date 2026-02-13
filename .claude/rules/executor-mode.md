@@ -12,7 +12,35 @@
 - project = 현재 디렉토리의 basename
 
 ## 워크플로우
-1. 세션 파일 읽기: `$ORCHESTRATE_SESSION_FILE`에서 Leader pane ID 확인
+1. **세션 파일 읽기 + 워크트리 체크**
+   ```bash
+   # 세션 파일에서 worktree_path 읽기
+   WORKTREE_PATH=$(jq -r '.worktree_path' "$ORCHESTRATE_SESSION_FILE")
+
+   # 워크트리 경로로 이동 (반드시 필수)
+   if [ -n "$WORKTREE_PATH" ] && [ "$WORKTREE_PATH" != "null" ]; then
+     cd "$WORKTREE_PATH"
+   else
+     # 워크트리 경로 없음 = 메인 레포 작업 위험!
+     echo "❌ ERROR: worktree_path not found in session file!"
+     echo "   This means you're working in the main repo, which is DANGEROUS."
+     echo "   orchestrate must create a worktree first."
+     exit 1
+   fi
+
+   # 현재 디렉토리가 메인 레포가 아닌지 확인
+   if [ -f ".git/config" ]; then
+     REPO_MAIN=$(git rev-parse --git-common-dir)
+     CURRENT_MAIN=$(pwd)/.git
+     if [ "$REPO_MAIN" = "$CURRENT_MAIN" ]; then
+       echo "❌ SECURITY ERROR: Working in main repository!"
+       echo "   Current dir: $(pwd)"
+       echo "   Executor must only work in worktree."
+       exit 1
+     fi
+   fi
+   ```
+
 2. `pending/` 스펙 목록 확인
 3. 스펙 선택 → `doing/`으로 이동
 4. 스펙의 Scope와 Requirements에 따라 구현
