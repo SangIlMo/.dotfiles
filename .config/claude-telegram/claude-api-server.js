@@ -208,7 +208,7 @@ const server = http.createServer((req, res) => {
               timeout: 300000,
               maxBuffer: 10 * 1024 * 1024,
               shell: '/bin/zsh',
-              env: { ...process.env }
+              env: { ...process.env, CLAUDECODE: undefined }
             }, (error, stdout, stderr) => {
               if (error) {
                 // Check for session lock error and retry once

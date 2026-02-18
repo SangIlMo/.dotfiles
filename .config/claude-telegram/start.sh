@@ -4,9 +4,9 @@ set -euo pipefail
 CONFIG_DIR="$HOME/.config/claude-telegram"
 source "$CONFIG_DIR/config.env"
 
-NODE="/Users/sangil.mo/.local/share/mise/installs/node/22.22.0/bin/node"
-N8N="/Users/sangil.mo/.local/share/mise/installs/node/22.22.0/bin/n8n"
-CLOUDFLARED="/opt/homebrew/bin/cloudflared"
+NODE="$(which node)"
+N8N="$(which n8n)"
+CLOUDFLARED="$(which cloudflared)"
 
 LOG_DIR="$CONFIG_DIR/logs"
 mkdir -p "$LOG_DIR"
