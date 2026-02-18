@@ -140,3 +140,6 @@ compinit
 
 # fzf 설정 (compinit 이후에 source해야 Tab 바인딩 정상 작동)
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# Prompt: user@host 추가 (multi-machine 구분)
+PROMPT='%{$fg[cyan]%}%n@%m%{$reset_color%} '"$PROMPT"
