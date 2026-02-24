@@ -1,252 +1,134 @@
 #!/bin/bash
-# claude-status.sh - Display Claude Code sessions and Agent Teams status for tmux status bar
-# Features:
-#   - Detects all tmux panes running Claude via mise process
-#   - Extracts model name and context usage from Claude status line
-#   - Shows working/idle state by detecting activity indicators
-#   - Displays compact summary: C:5 H1·O4 avg:68%  or  C:5 ▰▰▱ 65%
-#   - Keeps Agent Teams task progress
-# Output example: C:5 H1·O4 avg:68% | Team:my-team 2/5
+# claude-status.sh - Display active Claude sessions + daily usage % in tmux status bar
 
 set -o pipefail
 
 # Dracula theme colors
-DRACULA_GREEN="#[fg=#50fa7b]"
-DRACULA_CYAN="#[fg=#8be9fd]"
-DRACULA_PURPLE="#[fg=#bd93f9]"
-DRACULA_YELLOW="#[fg=#f1fa8c]"
-DRACULA_RED="#[fg=#ff5555]"
-DRACULA_GRAY="#[fg=#6272a4]"
-DRACULA_RESET="#[fg=default]"
+CYAN="#[fg=#8be9fd]"
+GREEN="#[fg=#50fa7b]"
+YELLOW="#[fg=#f1fa8c]"
+RED="#[fg=#ff5555]"
+GRAY="#[fg=#6272a4]"
+RESET="#[fg=default]"
 
-# Cache file for context data (refresh every 5 seconds)
+# Cache
 CACHE_DIR="${HOME}/.cache/tmux"
 CACHE_FILE="${CACHE_DIR}/claude-status-cache"
-CACHE_AGE=5  # seconds
+CACHE_AGE=5
 
 mkdir -p "$CACHE_DIR"
 
-# Function to detect if cache is still valid
 is_cache_valid() {
     [ -f "$CACHE_FILE" ] || return 1
-    local now=$(date +%s)
-    local mtime=$(stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    mtime=$(stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0)
     [ $((now - mtime)) -lt $CACHE_AGE ]
 }
 
-# Function to extract Claude status line from pane content
-extract_claude_status() {
-    local pane_id="$1"
-    local content
-
-    # Capture last 5 lines of pane (enough for status line + some context)
-    content=$(tmux capture-pane -p -t "$pane_id" -S -5)
-
-    # Look for Claude status line pattern:
-    # "Model in /path | Context: XX% | Style: default"
-    # or simpler: "Context: XX%"
-    if echo "$content" | grep -q "Context:"; then
-        echo "$content"
-        return 0
+check_pane_activity() {
+    content=$(tmux capture-pane -p -t "$1" -S -3 2>/dev/null)
+    [ -z "$content" ] && echo "idle" && return
+    if echo "$content" | grep -qE '(⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|✻|⏺|Thinking|Reading|Editing|Writing|Searching|Running)'; then
+        echo "working"
+    else
+        echo "idle"
     fi
-    return 1
 }
 
-# Function to parse model name from status line
-get_model() {
-    local content="$1"
+# Calculate today's usage % against Max plan ($100/month, ~$3.33/day)
+# Token pricing (per 1M, avg of input/output):
+#   opus: ~$45, sonnet: ~$10, haiku: ~$3.5, glm: ~$5
+calc_daily_usage_pct() {
+    stats_file="$HOME/.claude/stats-cache.json"
+    [ -f "$stats_file" ] || return
 
-    # Try to extract model from "Model in /path" pattern
-    if echo "$content" | grep -q "Model in"; then
-        echo "$content" | grep "Model in" | sed -E 's/.*Model in ([^ |]+).*/\1/' | xargs basename
-        return 0
+    today=$(date +%Y-%m-%d)
+    token_data=$(jq -r --arg d "$today" '.dailyModelTokens[] | select(.date == $d) | .tokensByModel' "$stats_file" 2>/dev/null)
+
+    # If no data for today, try yesterday (cache may lag)
+    if [ -z "$token_data" ] || [ "$token_data" = "null" ]; then
+        yesterday=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null)
+        token_data=$(jq -r --arg d "$yesterday" '.dailyModelTokens[] | select(.date == $d) | .tokensByModel' "$stats_file" 2>/dev/null)
+        [ -z "$token_data" ] || [ "$token_data" = "null" ] && return
     fi
 
-    # Fallback: check for model names in common patterns
-    if echo "$content" | grep -qi "haiku"; then
-        echo "H"
-        return 0
-    elif echo "$content" | grep -qi "opus"; then
-        echo "O"
-        return 0
-    elif echo "$content" | grep -qi "sonnet"; then
-        echo "S"
-        return 0
-    fi
+    # Calculate cost in cents (integer math, multiply by 100 first)
+    # cost_cents = tokens * price_per_M * 100 / 1000000 = tokens * price_cents_per_M / 1000000
+    opus=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("opus")) | .value ] | add // 0')
+    sonnet=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("sonnet")) | .value ] | add // 0')
+    haiku=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("haiku")) | .value ] | add // 0')
+    other=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("opus|sonnet|haiku") | not) | .value ] | add // 0')
 
-    return 1
+    # Cost in millicents for precision: price * 1000 per M tokens
+    # opus=$45/M=45000mc, sonnet=$10/M=10000mc, haiku=$3.5/M=3500mc, other=$5/M=5000mc
+    cost_mc=$(( opus * 45000 / 1000000 + sonnet * 10000 / 1000000 + haiku * 3500 / 1000000 + other * 5000 / 1000000 ))
+
+    # Daily budget: $3.33 = 333000 millicents
+    daily_budget_mc=333000
+    pct=$((cost_mc * 100 / daily_budget_mc))
+
+    echo "$pct"
 }
 
-# Function to parse context percentage from status line
-get_context_pct() {
-    local content="$1"
+generate_cache() {
+    total=0
+    working=0
 
-    # Extract XX from "Context: XX%"
-    echo "$content" | grep -oE "Context: [0-9]+" | grep -oE "[0-9]+" || echo "0"
-}
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        pane_id=$(echo "$line" | awk '{print $1}')
+        cmd=$(echo "$line" | awk '{$1=""; print $0}' | xargs)
 
-# Function to detect if Claude pane is working (vs idle)
-is_working() {
-    local content="$1"
+        if echo "$cmd" | grep -qE '([0-9]+\.[0-9]+\.[0-9]+|claude|mise)'; then
+            pid=$(tmux list-panes -a -F "#{pane_id} #{pane_pid}" 2>/dev/null | grep "^${pane_id} " | awk '{print $2}')
+            [ -z "$pid" ] && continue
 
-    # Working indicators: spinner chars, activity verbs
-    if echo "$content" | grep -qE "(✻|✽|⏺|Bloviating|Crunching|Sautéed|Thinking|Processing|Generating)"; then
-        return 0
-    fi
-
-    # Idle indicator: prompt line "❯" without active work
-    if echo "$content" | grep -q "❯"; then
-        return 1
-    fi
-
-    # Default: if contains status line, assume idle (prompt not visible in last 5 lines)
-    return 1
-}
-
-# Main detection and caching logic
-if ! is_cache_valid; then
-    # Regenerate cache
-    {
-        # Get all panes and find those running Claude
-        local total_panes=0
-        local working_count=0
-        declare -A model_count
-        local context_values=()
-        local context_sum=0
-        local context_count=0
-
-        # Find all panes with mise process (Claude runs via mise)
-        while IFS= read -r pane_line; do
-            [ -z "$pane_line" ] && continue
-
-            local pane_id=$(echo "$pane_line" | awk '{print $1}')
-            local command=$(echo "$pane_line" | awk '{$1=""; print $0}' | xargs)
-
-            # Check if this pane is running mise or claude
-            if echo "$command" | grep -qE "(mise|claude|z\.ai)"; then
-                content=$(extract_claude_status "$pane_id")
-
-                if [ -n "$content" ]; then
-                    total_panes=$((total_panes + 1))
-
-                    # Extract model and context
-                    model=$(get_model "$content")
-                    model=${model:-"U"}
-                    ((model_count[$model]++))
-
-                    context=$(get_context_pct "$content")
-                    context_values+=("$context")
-                    context_sum=$((context_sum + context))
-                    context_count=$((context_count + 1))
-
-                    # Check if working
-                    if is_working "$content"; then
-                        working_count=$((working_count + 1))
-                    fi
-                fi
+            if ps -o command= -p "$pid" 2>/dev/null | grep -q claude || \
+               pgrep -P "$pid" 2>/dev/null | xargs ps -o command= 2>/dev/null | grep -q claude; then
+                total=$((total + 1))
+                state=$(check_pane_activity "$pane_id")
+                [ "$state" = "working" ] && working=$((working + 1))
             fi
-        done < <(tmux list-panes -a -F '#{pane_id} #{pane_current_command}')
+        fi
+    done < <(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' 2>/dev/null)
 
-        # Generate output
-        if [ "$total_panes" -eq 0 ]; then
-            echo "C:0"
+    if [ "$total" -eq 0 ]; then
+        echo ""
+        return
+    fi
+
+    idle=$((total - working))
+    parts=""
+    [ "$working" -gt 0 ] && parts="⚙${working}"
+    [ "$idle" -gt 0 ] && { [ -n "$parts" ] && parts="${parts}·◇${idle}" || parts="◇${idle}"; }
+
+    # Session info
+    session_str="⚡${total} ${parts}"
+
+    # Usage %
+    pct=$(calc_daily_usage_pct)
+    if [ -n "$pct" ] && [ "$pct" -gt 0 ] 2>/dev/null; then
+        # Color by threshold
+        if [ "$pct" -ge 80 ]; then
+            pct_color="$RED"
+        elif [ "$pct" -ge 50 ]; then
+            pct_color="$YELLOW"
         else
-            # Calculate average context
-            local avg_context=0
-            if [ "$context_count" -gt 0 ]; then
-                avg_context=$((context_sum / context_count))
-            fi
-
-            # Build compact display
-            local status_str="C:$total_panes"
-
-            # Try detailed model breakdown if space allows
-            local has_models=false
-            local model_str=""
-            for model in H S O U; do
-                count=${model_count[$model]:-0}
-                if [ "$count" -gt 0 ]; then
-                    has_models=true
-                    [ -z "$model_str" ] && model_str="$model$count" || model_str="$model_str·$model$count"
-                fi
-            done
-
-            # If we have model breakdown and it's short, use it; otherwise use visual bar
-            if [ "$has_models" = true ] && [ ${#model_str} -le 15 ]; then
-                status_str="$status_str $model_str avg:${avg_context}%"
-            else
-                # Fallback to simple visual bar (4 blocks, 25% each)
-                local bar=""
-                local filled=$((avg_context / 25))
-                [ "$filled" -gt 4 ] && filled=4
-                for ((i=0; i<filled; i++)); do bar="${bar}▰"; done
-                for ((i=filled; i<4; i++)); do bar="${bar}▱"; done
-                status_str="$status_str ${bar} ${avg_context}%"
-            fi
-
-            # Add working indicator if needed
-            if [ "$working_count" -gt 0 ]; then
-                status_str="${status_str} ✻${working_count}"
-            fi
-
-            echo "$status_str"
+            pct_color="$GREEN"
         fi
-    } > "$CACHE_FILE"
-fi
-
-# Read from cache
-claude_status=""
-if [ -f "$CACHE_FILE" ]; then
-    claude_status=$(cat "$CACHE_FILE")
-    if [ -n "$claude_status" ]; then
-        claude_status="${DRACULA_CYAN}${claude_status}${DRACULA_RESET}"
+        session_str="${session_str} ${pct_color}${pct}%${CYAN}"
     fi
+
+    echo "$session_str"
+}
+
+if ! is_cache_valid; then
+    generate_cache > "$CACHE_FILE"
 fi
 
-# Check Agent Teams status (lightweight, not cached)
-team_str=""
-teams_dir="$HOME/.claude/teams"
+status=""
+[ -f "$CACHE_FILE" ] && status=$(cat "$CACHE_FILE")
 
-if [ -d "$teams_dir" ]; then
-    # Find the most recent team config
-    for team_dir in "$teams_dir"/*/; do
-        [ -d "$team_dir" ] || continue
-        config_file="${team_dir}config.json"
-        [ -f "$config_file" ] || continue
-
-        # Extract team name from directory
-        team_name=$(basename "$team_dir")
-
-        # Count members
-        member_count=$(jq -r '.members | length' "$config_file" 2>/dev/null || echo 0)
-
-        # Count tasks
-        tasks_dir="$HOME/.claude/tasks/${team_name}"
-        if [ -d "$tasks_dir" ]; then
-            total_tasks=0
-            completed_tasks=0
-            for task_file in "$tasks_dir"/*.json; do
-                [ -f "$task_file" ] || continue
-                total_tasks=$((total_tasks + 1))
-                status=$(jq -r '.status // empty' "$task_file" 2>/dev/null)
-                [ "$status" = "completed" ] && completed_tasks=$((completed_tasks + 1))
-            done
-
-            if [ "$total_tasks" -gt 0 ]; then
-                team_str=" ${DRACULA_PURPLE}Team:${team_name} ${completed_tasks}/${total_tasks}${DRACULA_RESET}"
-            fi
-        fi
-
-        # Only show the first active team
-        break
-    done
+if [ -n "$status" ]; then
+    echo "${CYAN}${status}${RESET}"
 fi
-
-# Output combined status
-if [ -n "$claude_status" ]; then
-    echo -n "$claude_status"
-fi
-if [ -n "$team_str" ]; then
-    echo -n "$team_str"
-fi
-[ -n "$claude_status" ] || [ -n "$team_str" ] && echo ""
