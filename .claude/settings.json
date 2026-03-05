@@ -66,5 +66,7 @@
   },
   "autoMemoryEnabled": true,
   "teammateMode": "tmux",
-  "effortLevel": "low"
+  "effortLevel": "low",
+  "skipDangerousModePermissionPrompt": true,
+  "additionalDirectories": ["~/obsidian-vault"]
 }
