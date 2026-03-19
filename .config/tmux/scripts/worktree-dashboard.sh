@@ -263,7 +263,9 @@ do_go() {
     # No panes — create new window at worktree path
     # Pre-trust mise to avoid interactive prompt
     if [[ -f "$sel_path/.mise.toml" || -f "$sel_path/.mise/config.toml" ]]; then
-      mise trust "$sel_path" 2>/dev/null
+      for f in "$sel_path/.mise.toml" "$sel_path/.mise/config.toml"; do
+        [[ -f "$f" ]] && mise trust "$f" 2>/dev/null
+      done
     fi
     local branch_short
     branch_short=$(basename "$sel_branch")
@@ -337,7 +339,9 @@ do_go() {
 do_open() {
   get_selected
   if [[ -f "$sel_path/.mise.toml" || -f "$sel_path/.mise/config.toml" ]]; then
-    mise trust "$sel_path" 2>/dev/null
+    for f in "$sel_path/.mise.toml" "$sel_path/.mise/config.toml"; do
+        [[ -f "$f" ]] && mise trust "$f" 2>/dev/null
+      done
   fi
   local branch_short
   branch_short=$(basename "$sel_branch")
