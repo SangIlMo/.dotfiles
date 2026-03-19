@@ -9,7 +9,8 @@
       "Bash"
     ],
     "deny": [
-      "Bash(git * --no-verify*)"
+      "Bash(git * --no-verify*)",
+      "Bash(gh api */git/refs*)"
     ]
   },
   "model": "opus",

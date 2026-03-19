@@ -148,7 +148,7 @@ Return ONLY a JSON object:
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     result = subprocess.run(
         ["claude", "-p", "--model", model, prompt],
-        capture_output=True, text=True, timeout=30, env=env,
+        capture_output=True, text=True, timeout=60, env=env,
     )
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI failed: {result.stderr.strip()}")
@@ -187,13 +187,78 @@ def send_telegram(item, evaluation, config):
     )
 
     try:
-        requests.post(
+        resp = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
             timeout=10,
         )
+        resp.raise_for_status()
+        print(f"  [TELEGRAM] Sent: {item['title'][:50]}")
     except Exception as e:
         print(f"  [WARN] Telegram send failed: {e}")
+
+
+def send_telegram_summary(saved_items, skipped_items, all_evaluated, n_collected, config, date_str):
+    tg = config.get("telegram", {})
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", tg.get("bot_token"))
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", tg.get("chat_id"))
+    if not token or not chat_id:
+        return
+    if not all_evaluated:
+        return
+
+    tg_min = tg.get("min_score", 12)
+
+    high = []    # score >= tg_min (12+)
+    mid = []     # 10 <= score < tg_min (10-11)
+
+    for item, evaluation, filepath in saved_items:
+        score = (
+            evaluation.get("relevance", 0)
+            + evaluation.get("actionability", 0)
+            + evaluation.get("reliability", 0)
+        )
+        category = evaluation.get("category", "inbox")
+        entry = (item.get("title", ""), item.get("url", ""), score, category)
+        if score >= tg_min:
+            high.append(entry)
+        else:
+            mid.append(entry)
+
+    n_evaluated = len(all_evaluated)
+    n_saved = len(saved_items)
+    n_skipped = n_evaluated - n_saved
+
+    lines = [
+        f"📊 Daily Insights ({date_str})",
+        f"수집: {n_collected}건 → 평가: {n_evaluated}건 → 선별: {n_saved}건",
+    ]
+
+    if high:
+        lines.append(f"\n⭐ {tg_min}+ ({len(high)}건)")
+        for title, url, score, category in high:
+            lines.append(f"• [{title}]({url}) ({score}) - {category}")
+
+    if mid:
+        lines.append(f"\n✅ 10-{tg_min - 1} ({len(mid)}건)")
+        for title, url, score, category in mid:
+            lines.append(f"• [{title}]({url}) ({score}) - {category}")
+
+    if n_skipped:
+        lines.append(f"\n⬚ 9 이하 ({n_skipped}건) - 스킵됨")
+
+    text = "\n".join(lines)
+
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        print(f"  [TELEGRAM] Summary sent: {n_saved} saved, {n_skipped} skipped")
+    except Exception as e:
+        print(f"  [WARN] Telegram summary send failed: {e}")
 
 
 def save_to_vault(item, evaluation, vault_path, date_str):
@@ -296,6 +361,8 @@ def main():
     evaluated = 0
     saved_count = 0
     saved_items = []
+    skipped_items = []
+    all_evaluated = []
     new_seen_ids = list(seen_ids)
 
     for item in new_items:
@@ -311,17 +378,15 @@ def main():
             )
 
             new_seen_ids.append(item_id)
+            all_evaluated.append((item, evaluation))
 
             if score >= score_threshold:
                 filepath = save_to_vault(item, evaluation, vault_path, date_str)
                 saved_items.append((item, evaluation, filepath))
                 saved_count += 1
                 print(f"  [SAVED] score={score} | {item['title'][:60]}")
-
-                tg_min = config.get("telegram", {}).get("min_score", 12)
-                if score >= tg_min:
-                    send_telegram(item, evaluation, config)
             else:
+                skipped_items.append((item, evaluation))
                 print(f"  [SKIP]  score={score} | {item['title'][:60]}")
 
         except Exception as e:
@@ -330,6 +395,7 @@ def main():
 
     if saved_items:
         append_daily_summary(saved_items, vault_path, date_str)
+        send_telegram_summary(saved_items, skipped_items, all_evaluated, len(new_items), config, date_str)
 
     state["seen_ids"] = new_seen_ids
     state["last_run"] = datetime.now(timezone.utc).isoformat()

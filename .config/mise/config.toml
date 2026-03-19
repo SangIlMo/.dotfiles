@@ -8,43 +8,6 @@ idiomatic_version_file_enable_tools = []
 description = "Run Claude Code with bypass permissions"
 run = "claude --dangerously-skip-permissions"
 
-[tasks.claude-opus]
-description = "Run Claude Code with Opus model"
-run = "claude --model claude-opus-4-6"
-
-[tasks.claude-sonnet]
-description = "Run Claude Code with Sonnet model"
-run = "claude --model claude-sonnet-4-5-20250929"
-
-[tasks.claude-haiku]
-description = "Run Claude Code with Haiku model"
-run = "claude --model claude-haiku-4-5-20251001"
-
-[tasks.claude-planner]
-description = "Run Claude as planner (subscription, no API key)"
-dir = "{{cwd}}"
-run = "claude --dangerously-skip-permissions"
-
-[tasks.claude-executor]
-description = "Run Claude as executor (z.ai API key)"
-dir = "{{cwd}}"
-run = "~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
-
-[tasks.claude-dual]
-description = "Run executor in tmux window (LEADER_ID=N). Tester is spawned on-demand by executor."
-dir = "{{cwd}}"
-run = """
-LID="${LEADER_ID:-1}"
-# 숫자 검증
-if ! echo "$LID" | grep -qE '^[0-9]+$'; then echo "LEADER_ID must be numeric"; exit 1; fi
-tmux rename-window "leader${LID}"
-# dual{N}-{M} 형태: 기존 dual{N}-* 중 최대 M+1
-MAX_M=$(tmux list-windows -F '#{window_name}' | sed -n "s/^dual${LID}-\\([0-9]\\{1,\\}\\)$/\\1/p" | sort -n | tail -1)
-DM=$(( ${MAX_M:-0} + 1 ))
-DNAME="dual${LID}-${DM}"
-tmux new-window -n "$DNAME" -c "$PWD" "CLAUDE_LEADER_ID=${LID} ~/.config/mise/tasks/zai/claude --dangerously-skip-permissions"
-"""
-
 [tasks.specs-status]
 description = "Show EARS specs status for current project"
 run = """
@@ -57,6 +20,39 @@ for status in pending doing done; do
   ls "$SPECS_DIR/$status" 2>/dev/null | sed 's/^/  /'
 done
 """
+
+[tasks."tmux:ls"]
+description = "List tmux sessions"
+run = "tmux list-sessions 2>/dev/null || echo 'No tmux server running.'"
+
+[tasks."tmux:attach"]
+description = "Attach to tmux session (usage: mise run tmux:attach SESSION_NAME)"
+run = "tmux attach-session -t \"$1\""
+
+[tasks."tmux:new"]
+description = "Create new tmux session (usage: mise run tmux:new SESSION_NAME)"
+run = """
+NAME="${1:?Session name required}"
+tmux new-session -d -s "$NAME" -c "$PWD" && echo "Session '$NAME' created." && tmux attach-session -t "$NAME"
+"""
+
+[tasks."tmux:rename"]
+description = "Rename current tmux session (usage: mise run tmux:rename NEW_NAME)"
+run = """
+NEW="${1:?New name required}"
+tmux rename-session "$NEW" && echo "Session renamed to '$NEW'."
+"""
+
+[tasks."tmux:kill"]
+description = "Kill a tmux session (usage: mise run tmux:kill SESSION_NAME)"
+run = """
+NAME="${1:?Session name required}"
+tmux kill-session -t "$NAME" && echo "Session '$NAME' killed."
+"""
+
+[tasks."tmux:windows"]
+description = "List windows in current tmux session"
+run = "tmux list-windows -F '#I: #{window_name} #{window_active} (#{pane_current_command})'"
 
 [tools]
 ripgrep = "latest"
@@ -74,3 +70,4 @@ dust = "latest"
 jq = "latest"
 java = "25"
 maven = "3.9"
+"npm:dmux" = "latest"
