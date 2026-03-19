@@ -260,9 +260,15 @@ do_go() {
   get_selected
 
   if [[ -z "$sel_panes" ]]; then
-    if [[ -n "$CALLER_PANE" && "$CALLER_PANE" != *"#{"* ]]; then
-      tmux send-keys -t "$CALLER_PANE" "cd $(printf '%q' "$sel_path")" C-m
+    # No panes — create new window at worktree path
+    # Pre-trust mise to avoid interactive prompt
+    if [[ -f "$sel_path/.mise.toml" || -f "$sel_path/.mise/config.toml" ]]; then
+      mise trust "$sel_path" 2>/dev/null
     fi
+    local branch_short
+    branch_short=$(basename "$sel_branch")
+    branch_short="${branch_short:0:20}"
+    tmux new-window -c "$sel_path" -n "$branch_short"
     printf "\033[?25h"
     exit 0
   fi
@@ -330,6 +336,9 @@ do_go() {
 
 do_open() {
   get_selected
+  if [[ -f "$sel_path/.mise.toml" || -f "$sel_path/.mise/config.toml" ]]; then
+    mise trust "$sel_path" 2>/dev/null
+  fi
   local branch_short
   branch_short=$(basename "$sel_branch")
   branch_short="${branch_short:0:20}"
