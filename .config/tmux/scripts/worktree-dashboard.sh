@@ -34,9 +34,42 @@ real_pane=$(cd "$PANE_PATH" 2>/dev/null && pwd -P || echo "$PANE_PATH")
 
 filter_text=""
 
+# ── Collect pane info ────────────────────────────────────────────────────────
+# Build associative array: real_path → list of "pane_id:window_name"
+declare -A pane_map
+collect_panes() {
+  pane_map=()
+  while IFS=$'\t' read -r pid ppath wname; do
+    local real_p
+    real_p=$(cd "$ppath" 2>/dev/null && pwd -P || echo "$ppath")
+    if [[ -n "${pane_map[$real_p]}" ]]; then
+      pane_map[$real_p]="${pane_map[$real_p]},$pid"
+    else
+      pane_map[$real_p]="$pid"
+    fi
+  done < <(tmux list-panes -a -F $'#{pane_id}\t#{pane_current_path}\t#{window_name}' 2>/dev/null)
+}
+
+# Find panes whose path is inside a given worktree
+find_panes_for_wt() {
+  local wt_real="$1"
+  local result=""
+  for ppath in "${!pane_map[@]}"; do
+    if [[ "$ppath" == "$wt_real" || "$ppath" == "$wt_real/"* ]]; then
+      if [[ -n "$result" ]]; then
+        result="${result},${pane_map[$ppath]}"
+      else
+        result="${pane_map[$ppath]}"
+      fi
+    fi
+  done
+  echo "$result"
+}
+
 # ── Parse worktrees ──────────────────────────────────────────────────────────
 parse_worktrees() {
   wt_data=$(git -C "$PANE_PATH" worktree list --porcelain 2>/dev/null)
+  collect_panes
 
   all_entries=()
   main_wt=""
@@ -57,14 +90,11 @@ parse_worktrees() {
       fi
       [[ -z "$main_wt" ]] && main_wt="$cur_path"
 
-      # Compute dirty + ahead/behind
       local dirty="" ahead_behind=""
       if [[ -d "$cur_path/.git" || -f "$cur_path/.git" ]]; then
-        # Dirty check
         if [[ -n "$(git -C "$cur_path" status --porcelain 2>/dev/null | head -1)" ]]; then
           dirty="*"
         fi
-        # Ahead/behind
         local ab
         ab=$(git -C "$cur_path" rev-list --left-right --count "@{upstream}...HEAD" 2>/dev/null)
         if [[ -n "$ab" ]]; then
@@ -78,7 +108,13 @@ parse_worktrees() {
         fi
       fi
 
-      all_entries+=("${cur_path}|${cur_branch}|${tag}|${dirty}|${ahead_behind}")
+      # Find panes in this worktree
+      local real_cur
+      real_cur=$(cd "$cur_path" 2>/dev/null && pwd -P || echo "$cur_path")
+      local panes
+      panes=$(find_panes_for_wt "$real_cur")
+
+      all_entries+=("${cur_path}|${cur_branch}|${tag}|${dirty}|${ahead_behind}|${panes}")
       cur_path="" cur_branch=""
     fi
   done <<< "$wt_data"
@@ -108,7 +144,11 @@ parse_worktrees() {
         ahead_behind="$parts"
       fi
     fi
-    all_entries+=("${cur_path}|${cur_branch}|${tag}|${dirty}|${ahead_behind}")
+    local real_cur
+    real_cur=$(cd "$cur_path" 2>/dev/null && pwd -P || echo "$cur_path")
+    local panes
+    panes=$(find_panes_for_wt "$real_cur")
+    all_entries+=("${cur_path}|${cur_branch}|${tag}|${dirty}|${ahead_behind}|${panes}")
   fi
 
   apply_filter
@@ -121,7 +161,7 @@ apply_filter() {
     entries=("${all_entries[@]}")
   else
     for entry in "${all_entries[@]}"; do
-      IFS='|' read -r _ branch _ _ _ <<< "$entry"
+      IFS='|' read -r _ branch _ _ _ _ <<< "$entry"
       if [[ "${branch,,}" == *"${filter_text,,}"* ]]; then
         entries+=("$entry")
       fi
@@ -143,12 +183,12 @@ render() {
   else
     printf " ${BOLD} Worktrees — %s (%s)${RESET}\n" "$repo_name" "$total_count"
   fi
-  echo " ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo " ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 
   local i=0
   for entry in "${entries[@]}"; do
-    IFS='|' read -r wt_path branch tag dirty ahead_behind <<< "$entry"
+    IFS='|' read -r wt_path branch tag dirty ahead_behind panes <<< "$entry"
     local real_wt
     real_wt=$(cd "$wt_path" 2>/dev/null && pwd -P || echo "$wt_path")
 
@@ -167,48 +207,118 @@ render() {
     local tag_str=""
     [[ -n "$tag" ]] && tag_str=" ${YELLOW}[$tag]${RESET}"
 
-    # Dirty indicator
     local dirty_str=""
     [[ -n "$dirty" ]] && dirty_str=" ${RED}*${RESET}"
 
-    # Ahead/behind
     local ab_str=""
     [[ -n "$ahead_behind" ]] && ab_str=" ${MAGENTA}${ahead_behind}${RESET}"
+
+    # Pane display
+    local pane_str=""
+    if [[ -n "$panes" ]]; then
+      pane_str=" ${CYAN}[${panes}]${RESET}"
+    fi
 
     local display_path
     if [[ "$wt_path" == "$main_wt" ]]; then
       display_path="$wt_path"
     else
       display_path="${wt_path/#$HOME/~}"
-      (( ${#display_path} > 30 )) && display_path="..${display_path: -28}"
+      (( ${#display_path} > 28 )) && display_path="..${display_path: -26}"
     fi
 
     if (( i == cursor )); then
-      printf " ${REVERSE} ▸ ${marker}${REVERSE} %-22s${dirty_str}${ab_str}${tag_str}${REVERSE}  %-30s ${RESET}\n" \
+      printf " ${REVERSE} ▸ ${marker}${REVERSE} %-22s${dirty_str}${ab_str}${tag_str}${pane_str}${REVERSE}  %-28s ${RESET}\n" \
         "$display_branch" "$display_path"
     else
-      printf "   ${marker} %-22s${dirty_str}${ab_str}${tag_str}  ${DIM}%s${RESET}\n" \
+      printf "   ${marker} %-22s${dirty_str}${ab_str}${tag_str}${pane_str}  ${DIM}%s${RESET}\n" \
         "$display_branch" "$display_path"
     fi
     (( i++ ))
   done
 
   echo ""
-  echo -e " ${DIM}j/k=move  Enter=jump  o=open  l=log  d=delete  p=prune  /=filter  q=quit${RESET}"
+  echo -e " ${DIM}j/k=move  Enter=go  o=open  l=log  d=delete  p=prune  /=filter  q=quit${RESET}"
 }
 
 # ── Actions ──────────────────────────────────────────────────────────────────
 get_selected() {
-  IFS='|' read -r sel_path sel_branch sel_tag sel_dirty sel_ab <<< "${entries[$cursor]}"
+  IFS='|' read -r sel_path sel_branch sel_tag sel_dirty sel_ab sel_panes <<< "${entries[$cursor]}"
 }
 
-do_jump() {
+do_go() {
   get_selected
-  if [[ -n "$CALLER_PANE" && "$CALLER_PANE" != *"#{"* ]]; then
-    tmux send-keys -t "$CALLER_PANE" "cd $(printf '%q' "$sel_path")" C-m
+
+  if [[ -z "$sel_panes" ]]; then
+    # No panes in this worktree — cd in caller pane
+    if [[ -n "$CALLER_PANE" && "$CALLER_PANE" != *"#{"* ]]; then
+      tmux send-keys -t "$CALLER_PANE" "cd $(printf '%q' "$sel_path")" C-m
+    fi
+    printf "\033[?25h"
+    exit 0
   fi
-  printf "\033[?25h"
-  exit 0
+
+  # Split panes by comma
+  IFS=',' read -ra pane_list <<< "$sel_panes"
+
+  if (( ${#pane_list[@]} == 1 )); then
+    # Single pane — switch directly
+    tmux switch-client -t "${pane_list[0]}" 2>/dev/null || \
+      tmux select-pane -t "${pane_list[0]}" 2>/dev/null
+    printf "\033[?25h"
+    exit 0
+  fi
+
+  # Multiple panes — sub-selection
+  local pane_cursor=0
+  while true; do
+    clear
+    echo ""
+    printf " ${BOLD} %s — select pane${RESET}\n" "$sel_branch"
+    echo " ──────────────────────────────────"
+    echo ""
+
+    local pi=0
+    for pid in "${pane_list[@]}"; do
+      # Get pane details
+      local pane_info
+      pane_info=$(tmux display-message -p -t "$pid" \
+        '#{window_index}.#{pane_index} #{window_name} #{pane_current_command}' 2>/dev/null)
+      if (( pi == pane_cursor )); then
+        printf " ${REVERSE} ▸ %s  %s ${RESET}\n" "$pid" "$pane_info"
+      else
+        printf "   ${DIM}%s${RESET}  %s\n" "$pid" "$pane_info"
+      fi
+      (( pi++ ))
+    done
+
+    echo ""
+    echo -e " ${DIM}j/k=move  Enter=switch  q=back${RESET}"
+
+    local pkey
+    read -rsn1 pkey </dev/tty
+
+    if [[ "$pkey" == $'\x1b' ]]; then
+      read -rsn2 -t 0.1 pseq </dev/tty
+      case "$pseq" in
+        '[A') pkey="k" ;;
+        '[B') pkey="j" ;;
+        *) continue ;;
+      esac
+    fi
+
+    case "$pkey" in
+      j) (( pane_cursor < ${#pane_list[@]} - 1 )) && (( pane_cursor++ )) ;;
+      k) (( pane_cursor > 0 )) && (( pane_cursor-- )) ;;
+      "")
+        tmux switch-client -t "${pane_list[$pane_cursor]}" 2>/dev/null || \
+          tmux select-pane -t "${pane_list[$pane_cursor]}" 2>/dev/null
+        printf "\033[?25h"
+        exit 0
+        ;;
+      q|Q) return ;;
+    esac
+  done
 }
 
 do_open() {
@@ -283,12 +393,10 @@ do_filter() {
   filter_text=""
   while true; do
     apply_filter
-    # Clamp cursor
     local max=$(( ${#entries[@]} - 1 ))
     (( max < 0 )) && max=0
     (( cursor > max )) && cursor=$max
     render
-    # Show filter prompt
     printf "\033[?25h"
     printf "\r ${BOLD}/${RESET}${filter_text}\033[K"
 
@@ -296,11 +404,9 @@ do_filter() {
     read -rsn1 ch </dev/tty
 
     if [[ "$ch" == "" ]]; then
-      # Enter — accept filter, return to main loop
       printf "\033[?25l"
       return
     elif [[ "$ch" == $'\x1b' ]]; then
-      # Escape — clear filter, return
       read -rsn2 -t 0.1 _ </dev/tty
       filter_text=""
       apply_filter
@@ -308,7 +414,6 @@ do_filter() {
       printf "\033[?25l"
       return
     elif [[ "$ch" == $'\x7f' || "$ch" == $'\x08' ]]; then
-      # Backspace
       if [[ -n "$filter_text" ]]; then
         filter_text="${filter_text%?}"
       fi
@@ -330,7 +435,6 @@ while true; do
   local_count="${#entries[@]}"
   if (( local_count == 0 )); then
     if [[ -n "$filter_text" ]]; then
-      # No matches — wait for key, clear filter
       read -rsn1 </dev/tty
       filter_text=""
       apply_filter
@@ -344,7 +448,6 @@ while true; do
 
   read -rsn1 key </dev/tty
 
-  # Handle escape sequences (arrow keys)
   if [[ "$key" == $'\x1b' ]]; then
     read -rsn2 -t 0.1 seq </dev/tty
     case "$seq" in
@@ -357,7 +460,7 @@ while true; do
   case "$key" in
     j) (( cursor < local_count - 1 )) && (( cursor++ )) ;;
     k) (( cursor > 0 )) && (( cursor-- )) ;;
-    "") do_jump ;;
+    "") do_go ;;
     o) do_open ;;
     l) do_log ;;
     d) do_delete ;;
