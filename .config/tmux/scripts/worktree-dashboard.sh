@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Worktree dashboard for tmux popup — interactive cursor-based UI
+# Compatible with bash 3.2+ (macOS default)
 
 # ── Arguments ────────────────────────────────────────────────────────────────
 if [[ -n "$1" && "$1" != *"#{"* ]]; then
@@ -22,6 +23,14 @@ YELLOW="\033[33m"
 MAGENTA="\033[35m"
 REVERSE="\033[7m"
 
+# ── Helpers ──────────────────────────────────────────────────────────────────
+# Case-insensitive contains (bash 3.2 compatible)
+ci_contains() {
+  local haystack=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+  local needle=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+  [[ "$haystack" == *"$needle"* ]]
+}
+
 # ── Git check ────────────────────────────────────────────────────────────────
 if ! git -C "$PANE_PATH" rev-parse --is-inside-work-tree &>/dev/null; then
   echo "Not a git repository"
@@ -35,17 +44,30 @@ real_pane=$(cd "$PANE_PATH" 2>/dev/null && pwd -P || echo "$PANE_PATH")
 filter_text=""
 
 # ── Collect pane info ────────────────────────────────────────────────────────
-# Build associative array: real_path → list of "pane_id:window_name"
-declare -A pane_map
+# Parallel arrays instead of associative array (bash 3.2 compat)
+pane_paths=()
+pane_ids_for_path=()
+
 collect_panes() {
-  pane_map=()
+  pane_paths=()
+  pane_ids_for_path=()
   while IFS=$'\t' read -r pid ppath wname; do
     local real_p
     real_p=$(cd "$ppath" 2>/dev/null && pwd -P || echo "$ppath")
-    if [[ -n "${pane_map[$real_p]}" ]]; then
-      pane_map[$real_p]="${pane_map[$real_p]},$pid"
+    # Find existing index
+    local found=-1 idx=0
+    for pp in "${pane_paths[@]}"; do
+      if [[ "$pp" == "$real_p" ]]; then
+        found=$idx
+        break
+      fi
+      (( idx++ ))
+    done
+    if (( found >= 0 )); then
+      pane_ids_for_path[$found]="${pane_ids_for_path[$found]},$pid"
     else
-      pane_map[$real_p]="$pid"
+      pane_paths+=("$real_p")
+      pane_ids_for_path+=("$pid")
     fi
   done < <(tmux list-panes -a -F $'#{pane_id}\t#{pane_current_path}\t#{window_name}' 2>/dev/null)
 }
@@ -54,16 +76,40 @@ collect_panes() {
 find_panes_for_wt() {
   local wt_real="$1"
   local result=""
-  for ppath in "${!pane_map[@]}"; do
-    if [[ "$ppath" == "$wt_real" || "$ppath" == "$wt_real/"* ]]; then
+  local idx=0
+  for pp in "${pane_paths[@]}"; do
+    if [[ "$pp" == "$wt_real" || "$pp" == "$wt_real/"* ]]; then
       if [[ -n "$result" ]]; then
-        result="${result},${pane_map[$ppath]}"
+        result="${result},${pane_ids_for_path[$idx]}"
       else
-        result="${pane_map[$ppath]}"
+        result="${pane_ids_for_path[$idx]}"
       fi
     fi
+    (( idx++ ))
   done
   echo "$result"
+}
+
+# ── Compute git status for a worktree path ───────────────────────────────────
+compute_wt_status() {
+  local wt_path="$1"
+  _dirty=""
+  _ahead_behind=""
+  if [[ -d "$wt_path/.git" || -f "$wt_path/.git" ]]; then
+    if [[ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null | head -1)" ]]; then
+      _dirty="*"
+    fi
+    local ab
+    ab=$(git -C "$wt_path" rev-list --left-right --count "@{upstream}...HEAD" 2>/dev/null)
+    if [[ -n "$ab" ]]; then
+      local behind ahead parts=""
+      behind=$(echo "$ab" | awk '{print $1}')
+      ahead=$(echo "$ab" | awk '{print $2}')
+      (( ahead > 0 )) && parts="↑${ahead}"
+      (( behind > 0 )) && parts="${parts}↓${behind}"
+      _ahead_behind="$parts"
+    fi
+  fi
 }
 
 # ── Parse worktrees ──────────────────────────────────────────────────────────
@@ -90,35 +136,18 @@ parse_worktrees() {
       fi
       [[ -z "$main_wt" ]] && main_wt="$cur_path"
 
-      local dirty="" ahead_behind=""
-      if [[ -d "$cur_path/.git" || -f "$cur_path/.git" ]]; then
-        if [[ -n "$(git -C "$cur_path" status --porcelain 2>/dev/null | head -1)" ]]; then
-          dirty="*"
-        fi
-        local ab
-        ab=$(git -C "$cur_path" rev-list --left-right --count "@{upstream}...HEAD" 2>/dev/null)
-        if [[ -n "$ab" ]]; then
-          local behind ahead
-          behind=$(echo "$ab" | awk '{print $1}')
-          ahead=$(echo "$ab" | awk '{print $2}')
-          local parts=""
-          (( ahead > 0 )) && parts="↑${ahead}"
-          (( behind > 0 )) && parts="${parts}↓${behind}"
-          ahead_behind="$parts"
-        fi
-      fi
-
-      # Find panes in this worktree
+      compute_wt_status "$cur_path"
       local real_cur
       real_cur=$(cd "$cur_path" 2>/dev/null && pwd -P || echo "$cur_path")
       local panes
       panes=$(find_panes_for_wt "$real_cur")
 
-      all_entries+=("${cur_path}|${cur_branch}|${tag}|${dirty}|${ahead_behind}|${panes}")
+      all_entries+=("${cur_path}|${cur_branch}|${tag}|${_dirty}|${_ahead_behind}|${panes}")
       cur_path="" cur_branch=""
     fi
   done <<< "$wt_data"
 
+  # Handle last entry (no trailing blank line)
   if [[ -n "$cur_path" ]]; then
     local tag=""
     if [[ "$cur_path" == *"/.claude/worktrees/"* ]]; then
@@ -127,28 +156,12 @@ parse_worktrees() {
       tag="dmux"
     fi
     [[ -z "$main_wt" ]] && main_wt="$cur_path"
-    local dirty="" ahead_behind=""
-    if [[ -d "$cur_path/.git" || -f "$cur_path/.git" ]]; then
-      if [[ -n "$(git -C "$cur_path" status --porcelain 2>/dev/null | head -1)" ]]; then
-        dirty="*"
-      fi
-      local ab
-      ab=$(git -C "$cur_path" rev-list --left-right --count "@{upstream}...HEAD" 2>/dev/null)
-      if [[ -n "$ab" ]]; then
-        local behind ahead
-        behind=$(echo "$ab" | awk '{print $1}')
-        ahead=$(echo "$ab" | awk '{print $2}')
-        local parts=""
-        (( ahead > 0 )) && parts="↑${ahead}"
-        (( behind > 0 )) && parts="${parts}↓${behind}"
-        ahead_behind="$parts"
-      fi
-    fi
+    compute_wt_status "$cur_path"
     local real_cur
     real_cur=$(cd "$cur_path" 2>/dev/null && pwd -P || echo "$cur_path")
     local panes
     panes=$(find_panes_for_wt "$real_cur")
-    all_entries+=("${cur_path}|${cur_branch}|${tag}|${dirty}|${ahead_behind}|${panes}")
+    all_entries+=("${cur_path}|${cur_branch}|${tag}|${_dirty}|${_ahead_behind}|${panes}")
   fi
 
   apply_filter
@@ -162,7 +175,7 @@ apply_filter() {
   else
     for entry in "${all_entries[@]}"; do
       IFS='|' read -r _ branch _ _ _ _ <<< "$entry"
-      if [[ "${branch,,}" == *"${filter_text,,}"* ]]; then
+      if ci_contains "$branch" "$filter_text"; then
         entries+=("$entry")
       fi
     done
@@ -213,11 +226,8 @@ render() {
     local ab_str=""
     [[ -n "$ahead_behind" ]] && ab_str=" ${MAGENTA}${ahead_behind}${RESET}"
 
-    # Pane display
     local pane_str=""
-    if [[ -n "$panes" ]]; then
-      pane_str=" ${CYAN}[${panes}]${RESET}"
-    fi
+    [[ -n "$panes" ]] && pane_str=" ${CYAN}[$(echo "$panes" | sed 's/%/%%/g')]${RESET}"
 
     local display_path
     if [[ "$wt_path" == "$main_wt" ]]; then
@@ -250,7 +260,6 @@ do_go() {
   get_selected
 
   if [[ -z "$sel_panes" ]]; then
-    # No panes in this worktree — cd in caller pane
     if [[ -n "$CALLER_PANE" && "$CALLER_PANE" != *"#{"* ]]; then
       tmux send-keys -t "$CALLER_PANE" "cd $(printf '%q' "$sel_path")" C-m
     fi
@@ -258,11 +267,9 @@ do_go() {
     exit 0
   fi
 
-  # Split panes by comma
   IFS=',' read -ra pane_list <<< "$sel_panes"
 
   if (( ${#pane_list[@]} == 1 )); then
-    # Single pane — switch directly
     tmux switch-client -t "${pane_list[0]}" 2>/dev/null || \
       tmux select-pane -t "${pane_list[0]}" 2>/dev/null
     printf "\033[?25h"
@@ -280,14 +287,14 @@ do_go() {
 
     local pi=0
     for pid in "${pane_list[@]}"; do
-      # Get pane details
       local pane_info
       pane_info=$(tmux display-message -p -t "$pid" \
         '#{window_index}.#{pane_index} #{window_name} #{pane_current_command}' 2>/dev/null)
+      local safe_pid="${pid//%/%%}"
       if (( pi == pane_cursor )); then
-        printf " ${REVERSE} ▸ %s  %s ${RESET}\n" "$pid" "$pane_info"
+        printf " ${REVERSE} ▸ ${safe_pid}  %s ${RESET}\n" "$pane_info"
       else
-        printf "   ${DIM}%s${RESET}  %s\n" "$pid" "$pane_info"
+        printf "   ${DIM}${safe_pid}${RESET}  %s\n" "$pane_info"
       fi
       (( pi++ ))
     done
