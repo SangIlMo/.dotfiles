@@ -88,9 +88,12 @@ mise trust "$WT_PATH"
 # 브랜치 짧은 이름 (tmux window name용)
 BRANCH_SHORT=$(basename "$BRANCH" | cut -c1-20)
 
+# 절대경로 변환
+WT_ABS="$(cd "$WT_PATH" && pwd -P)"
+
 # tmux new-window로 claude 자동 실행
-tmux new-window -c "$WT_PATH" -n "$BRANCH_SHORT" \
-  "claude --prompt 'Read .claude/plan.md and implement the plan. After implementation: run tests, commit changes, push, and create a PR. Then wait for review.'"
+tmux new-window -c "$WT_ABS" -n "$BRANCH_SHORT" \
+  "claude --dangerously-skip-permissions 'Read .claude/plan.md and implement the plan. After implementation: run tests, commit changes, push, and create a PR. Then wait for review.'"
 ```
 
 ## 완료 메시지

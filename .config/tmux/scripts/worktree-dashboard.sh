@@ -114,7 +114,7 @@ compute_wt_status() {
 
 # ── Parse worktrees ──────────────────────────────────────────────────────────
 parse_worktrees() {
-  wt_data=$(git -C "$PANE_PATH" worktree list --porcelain 2>/dev/null)
+  wt_data=$(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
   collect_panes
 
   all_entries=()
@@ -441,7 +441,7 @@ do_prune() {
   echo ""
   printf " ${BOLD} Pruning stale worktrees...${RESET}\n"
   echo " ──────────────────────────────────"
-  git -C "$PANE_PATH" worktree prune -v 2>&1 | while IFS= read -r line; do
+  git -C "$repo_root" worktree prune -v 2>&1 | while IFS= read -r line; do
     echo "  $line"
   done
   echo ""
