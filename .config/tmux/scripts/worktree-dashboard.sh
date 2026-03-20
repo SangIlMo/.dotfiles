@@ -370,13 +370,65 @@ do_delete() {
   fi
   clear
   echo ""
-  printf " Delete '${sel_branch}'? [y/N]: "
+
+  # Build pane list from sel_panes (comma-separated)
+  local pane_list=()
+  if [[ -n "$sel_panes" ]]; then
+    IFS=',' read -ra pane_list <<< "$sel_panes"
+  fi
+  local pane_count="${#pane_list[@]}"
+
+  # Show pane info if any panes are open
+  if (( pane_count > 0 )); then
+    printf " ${YELLOW}Open panes in '${sel_branch}':${RESET}\n"
+    for pid in "${pane_list[@]}"; do
+      local pane_info
+      pane_info=$(tmux display-message -p -t "$pid" \
+        '#{window_index}.#{pane_index} #{window_name} #{pane_current_command}' 2>/dev/null || echo "$pid")
+      local safe_pid="${pid//%/%%}"
+      printf "   ${DIM}${safe_pid}${RESET}  %s\n" "$pane_info"
+    done
+    echo ""
+    printf " Delete '${sel_branch}'? (${pane_count} pane(s) will be closed) [y/N]: "
+  else
+    printf " Delete '${sel_branch}'? [y/N]: "
+  fi
+
   printf "\033[?25h"
   local confirm
   read -r confirm </dev/tty
   printf "\033[?25l"
+
   if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
-    git worktree remove "$sel_path" 2>&1
+    # Kill claude processes and panes before removing the worktree
+    if (( pane_count > 0 )); then
+      local real_sel_path
+      real_sel_path=$(cd "$sel_path" 2>/dev/null && pwd -P || echo "$sel_path")
+      for pid in "${pane_list[@]}"; do
+        # Check if a claude process is running whose cwd matches the worktree path
+        local pane_cmd
+        pane_cmd=$(tmux display-message -p -t "$pid" '#{pane_current_command}' 2>/dev/null || echo "")
+        local pane_pid
+        pane_pid=$(tmux display-message -p -t "$pid" '#{pane_pid}' 2>/dev/null || echo "")
+        # Find claude child processes under this pane whose cwd is inside the worktree
+        if [[ -n "$pane_pid" ]]; then
+          local claude_pids
+          claude_pids=$(ps -o pid=,comm= -g "$pane_pid" 2>/dev/null | awk '/claude/{print $1}')
+          if [[ -z "$claude_pids" ]]; then
+            # Fallback: search by process name matching worktree path via lsof
+            claude_pids=$(lsof -a -p "$(pgrep -d, claude 2>/dev/null)" -d cwd 2>/dev/null \
+              | awk -v p="$real_sel_path" '$NF == p || index($NF, p"/") == 1 {print $2}' 2>/dev/null || true)
+          fi
+          if [[ -n "$claude_pids" ]]; then
+            echo "$claude_pids" | xargs -r kill -TERM 2>/dev/null || true
+            sleep 0.3
+            echo "$claude_pids" | xargs -r kill -KILL 2>/dev/null || true
+          fi
+        fi
+        tmux kill-pane -t "$pid" 2>/dev/null || true
+      done
+    fi
+    git -C "$repo_root" worktree remove --force "$sel_path" 2>&1
     parse_worktrees
     local max=$(( ${#entries[@]} - 1 ))
     (( cursor > max )) && cursor=$max

@@ -3,6 +3,7 @@
 # Shows worktree count when in a repo with active worktrees
 
 PANE_PATH="${1:-$PWD}"
+[ -d "$PANE_PATH" ] || exit 0
 CACHE_DIR="$HOME/.cache/tmux"
 CACHE_FILE="$CACHE_DIR/worktree-info-cache"
 CACHE_AGE=5

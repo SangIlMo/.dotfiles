@@ -4,6 +4,7 @@
 # Uses Nerd Font icons
 
 dir="${1:-$(pwd)}"
+[ -d "$dir" ] || exit 0
 cd "$dir" 2>/dev/null || exit 0
 
 # Check if inside a git repo
