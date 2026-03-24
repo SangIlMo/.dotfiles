@@ -415,21 +415,64 @@ do_delete() {
           local claude_pids
           claude_pids=$(ps -o pid=,comm= -g "$pane_pid" 2>/dev/null | awk '/claude/{print $1}')
           if [[ -z "$claude_pids" ]]; then
-            # Fallback: search by process name matching worktree path via lsof
-            claude_pids=$(lsof -a -p "$(pgrep -d, claude 2>/dev/null)" -d cwd 2>/dev/null \
-              | awk -v p="$real_sel_path" '$NF == p || index($NF, p"/") == 1 {print $2}' 2>/dev/null || true)
+            # Fallback: search by process args matching worktree path via ps
+            claude_pids=$(ps -eww -o pid=,args= 2>/dev/null | awk -v p="$real_sel_path" '/claude/ && index($0, p) {print $1}')
           fi
           if [[ -n "$claude_pids" ]]; then
             echo "$claude_pids" | xargs -r kill -TERM 2>/dev/null || true
             sleep 0.3
-            echo "$claude_pids" | xargs -r kill -KILL 2>/dev/null || true
+            # Wait up to ~2 seconds for processes to terminate
+            local wait_elapsed=0
+            while [[ $wait_elapsed -lt 4 ]]; do
+              local all_dead=true
+              for p in $claude_pids; do
+                if kill -0 "$p" 2>/dev/null; then
+                  all_dead=false
+                  break
+                fi
+              done
+              [[ "$all_dead" == true ]] && break
+              sleep 0.5
+              (( wait_elapsed++ )) || true
+            done
+            # Only SIGKILL processes that are still running
+            for p in $claude_pids; do
+              kill -0 "$p" 2>/dev/null && kill -KILL "$p" 2>/dev/null || true
+            done
           fi
         fi
         tmux kill-pane -t "$pid" 2>/dev/null || true
       done
     fi
-    git -C "$repo_root" worktree remove --force "$sel_path" 2>&1
-    parse_worktrees
+    sel_path=$(realpath "$sel_path" 2>/dev/null || echo "$sel_path")
+    local remove_output
+    remove_output=$(git -C "$repo_root" worktree remove --force "$sel_path" 2>&1)
+    if [[ $? -ne 0 ]]; then
+      rm -rf "$sel_path"
+      git -C "$repo_root" worktree prune
+      if [[ -d "$sel_path" ]]; then
+        clear
+        echo ""
+        echo " ✗ Failed to remove worktree: $remove_output"
+        echo ""
+        printf " Press any key..."
+        read -rsn1 </dev/tty
+      fi
+    fi
+    # Incremental removal instead of full re-parse after delete
+    local del_idx=-1
+    for i in "${!entries[@]}"; do
+      if [[ "${entries[$i]}" == *"$sel_path"* ]]; then
+        del_idx=$i
+        break
+      fi
+    done
+    if (( del_idx >= 0 )); then
+      unset 'entries[del_idx]'
+      entries=("${entries[@]}")  # Re-index array
+    else
+      parse_worktrees  # Fallback to full re-parse only if entry not found
+    fi
     local max=$(( ${#entries[@]} - 1 ))
     (( cursor > max )) && cursor=$max
     (( cursor < 0 )) && cursor=0

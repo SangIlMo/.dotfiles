@@ -13,10 +13,11 @@ argument: feature description
 2. Task(Explore)로 코드베이스 분석 위임
 3. Task(Plan)으로 구현 계획 설계 위임
 4. plan.md 작성 (아래 포맷)
-5. worktree 생성
-6. plan.md를 worktree에 복사
-7. mise trust + tmux new-window로 claude 자동 실행
-8. 완료 — 메인 claude는 다른 작업 가능
+5. 최신 main 브랜치로 동기화 (git checkout + pull)
+6. worktree 생성
+7. plan.md를 worktree에 복사
+8. mise trust + tmux new-window로 claude 자동 실행
+9. 완료 — 메인 claude는 다른 작업 가능
 
 ## 실행 단계
 
@@ -69,7 +70,14 @@ prompt: "분석 결과를 바탕으로 {argument} 구현 계획을 설계하라"
 {추가 컨텍스트, 제약사항}
 ```
 
-### Step 4: Worktree 생성 + Claude 실행
+### Step 4: Sync with latest main branch
+```bash
+# Ensure we're working from the latest main/primary branch
+BASE_BRANCH=$(grep "^- base:" plan.md | awk '{print $3}' || echo "main")
+git checkout "$BASE_BRANCH" && git pull origin "$BASE_BRANCH"
+```
+
+### Step 5: Worktree 생성 + Claude 실행
 ```bash
 # 브랜치명 생성
 BRANCH="feat/$(echo "{argument}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g' | cut -c1-40)"
