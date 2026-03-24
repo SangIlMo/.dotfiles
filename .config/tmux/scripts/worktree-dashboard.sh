@@ -400,8 +400,36 @@ do_delete() {
   printf "\033[?25l"
 
   if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+    # Spinner helper — runs in background, killed after slow operations
+    _spinner() {
+      local msg="$1"
+      local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+      local i=0
+      tput civis 2>/dev/null
+      while true; do
+        printf "\r %s %s" "${chars:i%${#chars}:1}" "$msg"
+        i=$(( i + 1 ))
+        sleep 0.1
+      done
+    }
+
+    _stop_spinner() {
+      local spid="$1"
+      kill "$spid" 2>/dev/null
+      wait "$spid" 2>/dev/null
+      printf "\r\033[K"
+      tput cnorm 2>/dev/null
+    }
+
+    local spinner_pid=""
+    # Ensure spinner is cleaned up on unexpected exit
+    trap '_stop_spinner "$spinner_pid" 2>/dev/null; tput cnorm 2>/dev/null' EXIT INT TERM
+
     # Kill claude processes and panes before removing the worktree
     if (( pane_count > 0 )); then
+      _spinner "Stopping processes..." &
+      spinner_pid=$!
+
       local real_sel_path
       real_sel_path=$(cd "$sel_path" 2>/dev/null && pwd -P || echo "$sel_path")
       for pid in "${pane_list[@]}"; do
@@ -443,11 +471,25 @@ do_delete() {
         fi
         tmux kill-pane -t "$pid" 2>/dev/null || true
       done
+
+      _stop_spinner "$spinner_pid"
+      spinner_pid=""
     fi
+
     sel_path=$(realpath "$sel_path" 2>/dev/null || echo "$sel_path")
-    local remove_output
+
+    _spinner "Removing worktree..." &
+    spinner_pid=$!
+
+    local remove_output remove_exit
     remove_output=$(git -C "$repo_root" worktree remove --force "$sel_path" 2>&1)
-    if [[ $? -ne 0 ]]; then
+    remove_exit=$?
+
+    _stop_spinner "$spinner_pid"
+    spinner_pid=""
+    trap - EXIT INT TERM
+
+    if [[ $remove_exit -ne 0 ]]; then
       rm -rf "$sel_path"
       git -C "$repo_root" worktree prune
       if [[ -d "$sel_path" ]]; then
