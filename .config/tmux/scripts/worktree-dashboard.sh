@@ -26,8 +26,9 @@ REVERSE="\033[7m"
 # ── Helpers ──────────────────────────────────────────────────────────────────
 # Case-insensitive contains (bash 3.2 compatible)
 ci_contains() {
-  local haystack=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-  local needle=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+  local haystack needle
+  haystack=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  needle=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
   [[ "$haystack" == *"$needle"* ]]
 }
 
@@ -73,21 +74,22 @@ collect_panes() {
 }
 
 # Find panes whose path is inside a given worktree
+# Result stored in global _fpwt_result instead of echo
+_fpwt_result=""
 find_panes_for_wt() {
   local wt_real="$1"
-  local result=""
+  _fpwt_result=""
   local idx=0
   for pp in "${pane_paths[@]}"; do
     if [[ "$pp" == "$wt_real" || "$pp" == "$wt_real/"* ]]; then
-      if [[ -n "$result" ]]; then
-        result="${result},${pane_ids_for_path[$idx]}"
+      if [[ -n "$_fpwt_result" ]]; then
+        _fpwt_result="${_fpwt_result},${pane_ids_for_path[$idx]}"
       else
-        result="${pane_ids_for_path[$idx]}"
+        _fpwt_result="${pane_ids_for_path[$idx]}"
       fi
     fi
     (( idx++ ))
   done
-  echo "$result"
 }
 
 # ── Compute git status for a worktree path ───────────────────────────────────
@@ -103,8 +105,7 @@ compute_wt_status() {
     ab=$(git -C "$wt_path" rev-list --left-right --count "@{upstream}...HEAD" 2>/dev/null)
     if [[ -n "$ab" ]]; then
       local behind ahead parts=""
-      behind=$(echo "$ab" | awk '{print $1}')
-      ahead=$(echo "$ab" | awk '{print $2}')
+      read -r behind ahead <<< "$ab"
       (( ahead > 0 )) && parts="↑${ahead}"
       (( behind > 0 )) && parts="${parts}↓${behind}"
       _ahead_behind="$parts"
@@ -121,34 +122,7 @@ parse_worktrees() {
   main_wt=""
   local cur_path="" cur_branch=""
 
-  while IFS= read -r line; do
-    if [[ "$line" =~ ^worktree\ (.+) ]]; then
-      cur_path="${BASH_REMATCH[1]}"
-      cur_branch=""
-    elif [[ "$line" =~ ^branch\ refs/heads/(.+) ]]; then
-      cur_branch="${BASH_REMATCH[1]}"
-    elif [[ "$line" == "" && -n "$cur_path" ]]; then
-      local tag=""
-      if [[ "$cur_path" == *"/.claude/worktrees/"* ]]; then
-        tag="claude"
-      elif [[ "$cur_path" == *"/.dmux/worktrees/"* || "$cur_path" == *"/dmux-"* ]]; then
-        tag="dmux"
-      fi
-      [[ -z "$main_wt" ]] && main_wt="$cur_path"
-
-      compute_wt_status "$cur_path"
-      local real_cur
-      real_cur=$(cd "$cur_path" 2>/dev/null && pwd -P || echo "$cur_path")
-      local panes
-      panes=$(find_panes_for_wt "$real_cur")
-
-      all_entries+=("${cur_path}|${cur_branch}|${tag}|${_dirty}|${_ahead_behind}|${panes}")
-      cur_path="" cur_branch=""
-    fi
-  done <<< "$wt_data"
-
-  # Handle last entry (no trailing blank line)
-  if [[ -n "$cur_path" ]]; then
+  _flush_wt_entry() {
     local tag=""
     if [[ "$cur_path" == *"/.claude/worktrees/"* ]]; then
       tag="claude"
@@ -159,9 +133,26 @@ parse_worktrees() {
     compute_wt_status "$cur_path"
     local real_cur
     real_cur=$(cd "$cur_path" 2>/dev/null && pwd -P || echo "$cur_path")
-    local panes
-    panes=$(find_panes_for_wt "$real_cur")
-    all_entries+=("${cur_path}|${cur_branch}|${tag}|${_dirty}|${_ahead_behind}|${panes}")
+    find_panes_for_wt "$real_cur"
+    local panes="$_fpwt_result"
+    all_entries+=("${cur_path}|${cur_branch}|${tag}|${_dirty}|${_ahead_behind}|${panes}|${real_cur}")
+  }
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^worktree\ (.+) ]]; then
+      cur_path="${BASH_REMATCH[1]}"
+      cur_branch=""
+    elif [[ "$line" =~ ^branch\ refs/heads/(.+) ]]; then
+      cur_branch="${BASH_REMATCH[1]}"
+    elif [[ "$line" == "" && -n "$cur_path" ]]; then
+      _flush_wt_entry
+      cur_path="" cur_branch=""
+    fi
+  done <<< "$wt_data"
+
+  # Handle last entry (no trailing blank line)
+  if [[ -n "$cur_path" ]]; then
+    _flush_wt_entry
   fi
 
   apply_filter
@@ -201,9 +192,7 @@ render() {
 
   local i=0
   for entry in "${entries[@]}"; do
-    IFS='|' read -r wt_path branch tag dirty ahead_behind panes <<< "$entry"
-    local real_wt
-    real_wt=$(cd "$wt_path" 2>/dev/null && pwd -P || echo "$wt_path")
+    IFS='|' read -r wt_path branch tag dirty ahead_behind panes real_wt <<< "$entry"
 
     local marker
     if [[ "$real_pane" == "$real_wt" || "$real_pane" == "$real_wt/"* ]]; then
@@ -227,7 +216,7 @@ render() {
     [[ -n "$ahead_behind" ]] && ab_str=" ${MAGENTA}${ahead_behind}${RESET}"
 
     local pane_str=""
-    [[ -n "$panes" ]] && pane_str=" ${CYAN}[$(echo "$panes" | sed 's/%/%%/g')]${RESET}"
+    [[ -n "$panes" ]] && pane_str=" ${CYAN}[${panes//%/%%}]${RESET}"
 
     local display_path
     if [[ "$wt_path" == "$main_wt" ]]; then
@@ -253,7 +242,7 @@ render() {
 
 # ── Actions ──────────────────────────────────────────────────────────────────
 get_selected() {
-  IFS='|' read -r sel_path sel_branch sel_tag sel_dirty sel_ab sel_panes <<< "${entries[$cursor]}"
+  IFS='|' read -r sel_path sel_branch sel_tag sel_dirty sel_ab sel_panes sel_real <<< "${entries[$cursor]}"
 }
 
 do_go() {

@@ -18,17 +18,16 @@ CACHE_AGE=5
 
 mkdir -p "$CACHE_DIR"
 
-is_cache_valid() {
-    [ -f "$CACHE_FILE" ] || return 1
-    now=$(date +%s)
-    mtime=$(stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0)
-    [ $((now - mtime)) -lt $CACHE_AGE ]
-}
+# #11: Source shared cache utility
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/cache.sh
+source "$_SCRIPT_DIR/lib/cache.sh"
 
 check_pane_activity() {
     content=$(tmux capture-pane -p -t "$1" -S -3 2>/dev/null)
     [ -z "$content" ] && echo "idle" && return
-    if echo "$content" | grep -qE '(⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|✻|⏺|Thinking|Reading|Editing|Writing|Searching|Running)'; then
+    # #16: use bash regex instead of echo | grep
+    if [[ "$content" =~ (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|✻|⏺|Thinking|Reading|Editing|Writing|Searching|Running) ]]; then
         echo "working"
     else
         echo "idle"
@@ -43,21 +42,24 @@ calc_daily_usage_pct() {
     [ -f "$stats_file" ] || return
 
     today=$(date +%Y-%m-%d)
-    token_data=$(jq -r --arg d "$today" '.dailyModelTokens[] | select(.date == $d) | .tokensByModel' "$stats_file" 2>/dev/null)
 
-    # If no data for today, try yesterday (cache may lag)
-    if [ -z "$token_data" ] || [ "$token_data" = "null" ]; then
-        yesterday=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null)
-        token_data=$(jq -r --arg d "$yesterday" '.dailyModelTokens[] | select(.date == $d) | .tokensByModel' "$stats_file" 2>/dev/null)
-        [ -z "$token_data" ] || [ "$token_data" = "null" ] && return
-    fi
+    # #13: merge today/yesterday jq calls into one with fallback logic
+    yesterday=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d 2>/dev/null)
+    token_data=$(jq -r --arg today "$today" --arg yesterday "$yesterday" '
+      (.dailyModelTokens[] | select(.date == $today) | .tokensByModel) //
+      (.dailyModelTokens[] | select(.date == $yesterday) | .tokensByModel) //
+      empty
+    ' "$stats_file" 2>/dev/null | head -1)
 
-    # Calculate cost in cents (integer math, multiply by 100 first)
-    # cost_cents = tokens * price_per_M * 100 / 1000000 = tokens * price_cents_per_M / 1000000
-    opus=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("opus")) | .value ] | add // 0')
-    sonnet=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("sonnet")) | .value ] | add // 0')
-    haiku=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("haiku")) | .value ] | add // 0')
-    other=$(echo "$token_data" | jq -r '[ to_entries[] | select(.key | test("opus|sonnet|haiku") | not) | .value ] | add // 0')
+    [ -z "$token_data" ] || [ "$token_data" = "null" ] && return
+
+    # #12: merge 4 jq calls into one
+    read -r opus sonnet haiku other < <(echo "$token_data" | jq -r '
+      [ to_entries[] | select(.key | test("opus"))                          | .value ] | add // 0,
+      [ to_entries[] | select(.key | test("sonnet"))                        | .value ] | add // 0,
+      [ to_entries[] | select(.key | test("haiku"))                         | .value ] | add // 0,
+      [ to_entries[] | select(.key | test("opus|sonnet|haiku") | not)       | .value ] | add // 0
+      | @tsv' 2>/dev/null | tr '\t' ' ')
 
     # Cost in millicents for precision: price * 1000 per M tokens
     # opus=$45/M=45000mc, sonnet=$10/M=10000mc, haiku=$3.5/M=3500mc, other=$5/M=5000mc
@@ -74,23 +76,23 @@ generate_cache() {
     total=0
     working=0
 
+    # #15: include pane_pid in format string, read all three fields in loop
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        pane_id=$(echo "$line" | awk '{print $1}')
-        cmd=$(echo "$line" | awk '{$1=""; print $0}' | xargs)
+        # #14: use read instead of awk for field splitting
+        read -r pane_id pane_pid cmd <<< "$line"
 
-        if echo "$cmd" | grep -qE '([0-9]+\.[0-9]+\.[0-9]+|claude|mise)'; then
-            pid=$(tmux list-panes -a -F "#{pane_id} #{pane_pid}" 2>/dev/null | grep "^${pane_id} " | awk '{print $2}')
-            [ -z "$pid" ] && continue
+        if [[ "$cmd" =~ ([0-9]+\.[0-9]+\.[0-9]+|claude|mise) ]]; then
+            [ -z "$pane_pid" ] && continue
 
-            if ps -o command= -p "$pid" 2>/dev/null | grep -q claude || \
-               pgrep -P "$pid" 2>/dev/null | xargs ps -o command= 2>/dev/null | grep -q claude; then
+            if ps -o command= -p "$pane_pid" 2>/dev/null | grep -q claude || \
+               pgrep -P "$pane_pid" 2>/dev/null | xargs ps -o command= 2>/dev/null | grep -q claude; then
                 total=$((total + 1))
                 state=$(check_pane_activity "$pane_id")
                 [ "$state" = "working" ] && working=$((working + 1))
             fi
         fi
-    done < <(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' 2>/dev/null)
+    done < <(tmux list-panes -a -F '#{pane_id} #{pane_pid} #{pane_current_command}' 2>/dev/null)
 
     if [ "$total" -eq 0 ]; then
         echo ""
@@ -122,7 +124,8 @@ generate_cache() {
     echo "$session_str"
 }
 
-if ! is_cache_valid; then
+# #11: use tmux_cache_valid from lib/cache.sh
+if ! tmux_cache_valid "$CACHE_FILE" "$CACHE_AGE"; then
     generate_cache > "$CACHE_FILE"
 fi
 

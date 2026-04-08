@@ -39,9 +39,13 @@ cpu_color=$(color_by_value "$cpu_pct")
 # Memory usage via vm_stat
 page_size=$(sysctl -n hw.pagesize 2>/dev/null || echo 16384)
 vm_stat_out=$(vm_stat 2>/dev/null)
-active=$(echo "$vm_stat_out" | awk '/Pages active/ {gsub(/\./,"",$3); print $3}')
-wired=$(echo "$vm_stat_out" | awk '/Pages wired/ {gsub(/\./,"",$4); print $4}')
-compressed=$(echo "$vm_stat_out" | awk '/Pages occupied by compressor/ {gsub(/\./,"",$5); print $5}')
+# #19: merge 3 awk calls into one pass over vm_stat output
+read -r active wired compressed < <(echo "$vm_stat_out" | awk '
+  /Pages active/                 { gsub(/\./,"",$3); a=$3 }
+  /Pages wired/                  { gsub(/\./,"",$4); w=$4 }
+  /Pages occupied by compressor/ { gsub(/\./,"",$5); c=$5 }
+  END { print a+0, w+0, c+0 }
+')
 total_mem=$(sysctl -n hw.memsize 2>/dev/null || echo 17179869184)
 
 used_pages=$(( ${active:-0} + ${wired:-0} + ${compressed:-0} ))
@@ -52,15 +56,15 @@ mem_color=$(color_by_value "$mem_pct")
 
 # Battery
 bat_info=$(pmset -g batt 2>/dev/null)
-bat_pct=$(echo "$bat_info" | grep -o '[0-9]*%' | head -1 | tr -d '%')
+# #21: avoid tr subshell for % removal
+bat_pct=$(echo "$bat_info" | grep -oE '[0-9]+%' | head -1)
+bat_pct="${bat_pct//%/}"
 
 bat_str=""
 if [ -n "$bat_pct" ]; then
     bat_color=$(color_by_battery "$bat_pct")
-    # Charging indicator
-    if echo "$bat_info" | grep -q "charging"; then
-        bat_icon="⚡"
-    elif echo "$bat_info" | grep -q "charged"; then
+    # #20: use bash pattern matching instead of grep subshells
+    if [[ "$bat_info" == *"charging"* || "$bat_info" == *"charged"* ]]; then
         bat_icon="⚡"
     else
         bat_icon=""

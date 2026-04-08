@@ -10,20 +10,17 @@ CACHE_AGE=5
 
 mkdir -p "$CACHE_DIR"
 
-is_cache_valid() {
-  [[ -f "$CACHE_FILE" ]] || return 1
-  local mod
-  mod=$(stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0)
-  local now
-  now=$(date +%s)
-  (( now - mod < CACHE_AGE ))
-}
+# Source shared cache utility (#7)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/cache.sh
+source "$_SCRIPT_DIR/lib/cache.sh"
 
 # Cache key = pane path; invalidate if path changed
 if [[ -f "$CACHE_FILE" ]]; then
-  cached_path=$(head -1 "$CACHE_FILE")
-  if [[ "$cached_path" == "$PANE_PATH" ]] && is_cache_valid; then
-    tail -1 "$CACHE_FILE"
+  # #10: read both lines in one pass
+  { read -r cached_path; read -r cached_result; } < "$CACHE_FILE"
+  if [[ "$cached_path" == "$PANE_PATH" ]] && tmux_cache_valid "$CACHE_FILE" "$CACHE_AGE"; then
+    printf '%s' "$cached_result"
     exit 0
   fi
 fi
@@ -37,7 +34,10 @@ fi
 
 # Get worktree list
 wt_list=$(git -C "$PANE_PATH" worktree list 2>/dev/null)
-wt_count=$(echo "$wt_list" | wc -l | tr -d ' ')
+
+# #8: count lines without wc/tr subshell
+wt_count=0
+while IFS= read -r _; do (( wt_count++ )); done <<< "$wt_list"
 
 # Hide if only main worktree
 if (( wt_count < 2 )); then
@@ -45,11 +45,12 @@ if (( wt_count < 2 )); then
   exit 0
 fi
 
-# Check if current pane is inside a worktree (not the main repo)
-main_wt=$(echo "$wt_list" | head -1 | awk '{print $1}')
+# #9: parse main worktree path without awk subshell
+read -r main_wt _ <<< "$(head -1 <<< "$wt_list")"
 toplevel=$(git -C "$PANE_PATH" rev-parse --show-toplevel 2>/dev/null)
-real_toplevel=$(cd "$toplevel" && pwd -P 2>/dev/null || echo "$toplevel")
-real_main=$(cd "$main_wt" && pwd -P 2>/dev/null || echo "$main_wt")
+# #9: use realpath instead of cd && pwd -P
+real_toplevel=$(realpath "$toplevel" 2>/dev/null || echo "$toplevel")
+real_main=$(realpath "$main_wt" 2>/dev/null || echo "$main_wt")
 
 if [[ "$real_toplevel" != "$real_main" ]]; then
   # Inside a worktree - green
