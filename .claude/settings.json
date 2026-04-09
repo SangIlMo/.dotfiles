@@ -78,6 +78,6 @@
   "skipDangerousModePermissionPrompt": true,
   "teammateMode": "tmux",
   "additionalDirectories": [
-    "~/obsidian-vault"
+    "~/notes/obsidian-vault"
   ]
 }
