@@ -1,0 +1,130 @@
+#!/bin/bash
+set -e
+
+# fix-pr-ci skill implementation
+# Usage: fix-pr-ci {PR_NUMBER} [OPTIONS]
+
+PR_NUMBER="$1"
+shift || true
+
+if [ -z "$PR_NUMBER" ]; then
+  echo "Usage: /fix-pr-ci {PR_NUMBER} [OPTIONS]"
+  echo "  Options: --max-iterations N (default: 30)"
+  exit 1
+fi
+
+# Parse options
+MAX_ITERATIONS=30
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --max-iterations)
+      MAX_ITERATIONS="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+# Get PR branch info
+echo "📋 Fetching PR #${PR_NUMBER} information..."
+PR_DATA=$(gh pr view "$PR_NUMBER" --json headRefName,title,state,statusCheckRollup 2>/dev/null || echo "")
+
+if [ -z "$PR_DATA" ]; then
+  echo "❌ Failed to get PR #${PR_NUMBER}. Make sure you have gh CLI configured."
+  exit 1
+fi
+
+PR_BRANCH=$(echo "$PR_DATA" | jq -r '.headRefName')
+PR_TITLE=$(echo "$PR_DATA" | jq -r '.title')
+PR_STATE=$(echo "$PR_DATA" | jq -r '.state')
+
+echo "✅ PR found: $PR_TITLE"
+echo "   Branch: $PR_BRANCH"
+echo "   State: $PR_STATE"
+
+# Function to get CI status
+get_ci_status() {
+  echo ""
+  echo "🔍 Checking CI status..."
+
+  # Try to get check runs
+  gh pr checks "$PR_NUMBER" 2>/dev/null | head -20 || echo "No check data available yet"
+}
+
+# Create PROMPT.md for ralph loop
+cat > .claude/PROMPT.md <<'EOF'
+# Auto-Fix PR CI Failures
+
+Your task: Fix all failing CI checks in this PR until all checks pass.
+
+## Current Status
+Check the current CI status with:
+```bash
+gh pr checks $PR_NUMBER
+```
+
+## Process
+
+1. **Analyze Failures**
+   - Run `gh pr checks $PR_NUMBER` to see current status
+   - Check detailed logs from failed checks
+   - Identify root causes
+
+2. **Fix Issues**
+   - Install missing dependencies
+   - Fix type errors, lint issues, test failures
+   - Run tests locally to verify
+   - Ensure build succeeds
+
+3. **Commit & Push**
+   - Commit changes with meaningful message
+   - Push to the PR branch
+   - Wait 10 seconds for CI to trigger
+
+4. **Iterate**
+   - Check status again
+   - If any checks still fail, repeat steps 1-3
+   - If all checks pass, output completion marker below
+
+## Completion
+
+When ALL checks pass (no ❌ or ⚠️), output:
+```
+<promise>ALL CHECKS PASSED</promise>
+```
+
+Do NOT exit until this marker is output.
+
+## Commands
+
+- Check PR status: `gh pr view $PR_NUMBER`
+- See checks: `gh pr checks $PR_NUMBER`
+- View PR files: `gh pr diff $PR_NUMBER`
+EOF
+
+# Create temporary script to replace variables
+sed -i.bak "s|\$PR_NUMBER|$PR_NUMBER|g" .claude/PROMPT.md
+rm -f .claude/PROMPT.md.bak
+
+echo ""
+echo "📝 PROMPT.md created with PR #${PR_NUMBER} context"
+get_ci_status
+
+echo ""
+echo "🚀 Starting Ralph Loop for CI auto-fix..."
+echo "   PR #${PR_NUMBER}: $PR_TITLE"
+echo "   Max iterations: ${MAX_ITERATIONS}"
+echo ""
+echo "Press Ctrl+C to cancel the loop."
+echo ""
+
+# Start ralph loop
+/ralph-loop "Fix all failing CI checks in PR #${PR_NUMBER} until all checks pass. Run 'gh pr checks ${PR_NUMBER}' frequently to monitor status. Output <promise>ALL CHECKS PASSED</promise> when complete." \
+  --max-iterations "$MAX_ITERATIONS" \
+  --completion-promise "ALL CHECKS PASSED"
+
+echo ""
+echo "✅ Ralph loop completed!"
+echo ""
